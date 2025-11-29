@@ -1,0 +1,224 @@
+const ItemId = {
+  __MULTI_TARGET__: "__multi_target__",
+  CARBON: "Carbon",
+  CARBON_POWDER: "Carbon_Powder",
+  ORIGOCRUST: "Origocrust",
+  ORIGOCRUST_POWDER: "Origocrust_Powder",
+  FERRIUM: "Ferrium",
+  FERRIUM_POWDER: "Ferrium_Powder",
+  ORIGINIUM_ORE: "Originium_Ore",
+  ORIGINIUM_POWDER: "Originium_Powder",
+  AKETINE: "Aketine",
+  AKETINE_POWDER: "Aketine_Powder",
+  JINCAO: "Jincao",
+  JINCAO_POWDER: "Jincao_Powder",
+  YAZHEN: "Yazhen",
+  YAZHEN_POWDER: "Yazhen_Powder",
+  BUCKFLOWER: "Buckflower",
+  BUCKFLOWER_POWDER: "Buckflower_Powder",
+  CITROME: "Citrome",
+  CITROME_POWDER: "Citrome_Powder",
+  SANDLEAF: "Sandleaf",
+  SANDLEAF_POWDER: "Sandleaf_Powder",
+  AMETHYST_FIBER: "Amethyst_Fiber",
+  AMETHYST_POWDER: "Amethyst_Powder",
+  DENSE_CARBON_POWDER: "Dense_Carbon_Powder",
+  STABILIZED_CARBON: "Stabilized_Carbon",
+  GROUND_BUCKFLOWER_POWDER: "Ground_Buckflower_Powder",
+  GROUND_CITROME_POWDER: "Ground_Citrome_Powder",
+  WOOD: "Wood",
+  DENSE_ORIGOCRUST_POWDER: "Dense_Origocrust_Powder",
+  PACKED_ORIGOCRUST: "Packed_Origocrust",
+  DENSE_ORIGINIUM_POWDER: "Dense_Originium_Powder",
+  DENSE_FERRIUM_POWDER: "Dense_Ferrium_Powder",
+  STEEL: "Steel",
+  FERRIUM_ORE: "Ferrium_Ore",
+  CRYSTON_POWDER: "Cryston_Powder",
+  CRYSTON_FIBER: "Cryston_Fiber",
+  AMETHYST_ORE: "Amethyst_Ore",
+  CUPRIUM: "Cuprium",
+  CUPRIUM_PART: "Cuprium_Part",
+  AMETHYST_PART: "Amethyst_Part",
+  CRYSTON_PART: "Cryston_Part",
+  FERRIUM_PART: "Ferrium_Part",
+  STEEL_PART: "Steel_Part",
+  AMETHYST_BOTTLE: "Amethyst_Bottle",
+  CRYSTON_BOTTLE: "Cryston_Bottle",
+  FERRIUM_BOTTLE: "Ferrium_Bottle",
+  STEEL_BOTTLE: "Steel_Bottle",
+  AKETINE_SEED: "Aketine_Seed",
+  BUCKFLOWER_SEED: "Buckflower_Seed",
+  CITROME_SEED: "Citrome_Seed",
+  SANDLEAF_SEED: "Sandleaf_Seed",
+  JINCAO_SEED: "Jincao_Seed",
+  YAZHEN_SEED: "Yazhen_Seed",
+  REED_RYE: "Reed_Rye",
+  REED_RYE_SEED: "Reed_Rye_Seed",
+  TARTPEPPER: "Tartpepper",
+  TARTPEPPER_SEED: "Tartpepper_Seed",
+  REDJADE_GINSENG: "Redjade_Ginseng",
+  REDJADE_GINSENG_SEED: "Redjade_Ginseng_Seed",
+  AMBER_RICE: "Amber_Rice",
+  AMBER_RICE_SEED: "Amber_Rice_Seed",
+  LC_BATTERY: "LC_Battery",
+  SC_BATTERY: "SC_Battery",
+  HC_BATTERY: "HC_Battery",
+  AMETHYST_COMPONENT: "Amethyst_Component",
+  FERRIUM_COMPONENT: "Ferrium_Component",
+  CRYSTON_COMPONENT: "Cryston_Component",
+  CUPRIUM_COMPONENT: "Cuprium_Component",
+  CANNED_CITROME_A: "Canned_Citrome_(A)",
+  CANNED_CITROME_B: "Canned_Citrome_(B)",
+  CANNED_CITROME_C: "Canned_Citrome_(C)",
+  BUCK_CAPSULE_A: "Buck_Capsule_(A)",
+  BUCK_CAPSULE_B: "Buck_Capsule_(B)",
+  BUCK_CAPSULE_C: "Buck_Capsule_(C)",
+  INDUSTRIAL_EXPLOSIVE: "Industrial_Explosive",
+  JINCAO_SOLUTION: "Jincao_Solution",
+  YAZHEN_SOLUTION: "Yazhen_Solution",
+  CLEAN_WATER: "Clean_Water",
+} as const;
+type ItemId = (typeof ItemId)[keyof typeof ItemId];
+
+const RecipeId = {
+  // Shredding Unit Recipes
+  SHREDDING_UNIT__CARBON_POWDER__1: "Shredding_Unit__Carbon_Powder__1",
+  SHREDDING_UNIT__ORIGOCRUST_POWDER__1: "Shredding_Unit__Origocrust_Powder__1",
+  SHREDDING_UNIT__FERRIUM_POWDER__1: "Shredding_Unit__Ferrium_Powder__1",
+  SHREDDING_UNIT__ORIGINIUM_POWDER__1: "Shredding_Unit__Originium_Powder__1",
+  SHREDDING_UNIT__AKETINE_POWDER__1: "Shredding_Unit__Aketine_Powder__1",
+  SHREDDING_UNIT__JINCAO_POWDER__1: "Shredding_Unit__Jincao_Powder__1",
+  SHREDDING_UNIT__YAZHEN_POWDER__1: "Shredding_Unit__Yazhen_Powder__1",
+  SHREDDING_UNIT__BUCKFLOWER_POWDER__1: "Shredding_Unit__Buckflower_Powder__1",
+  SHREDDING_UNIT__CITROME_POWDER__1: "Shredding_Unit__Citrome_Powder__1",
+  SHREDDING_UNIT__SANDLEAF_POWDER__1: "Shredding_Unit__Sandleaf_Powder__1",
+  SHREDDING_UNIT__AMETHYST_POWDER__1: "Shredding_Unit__Amethyst_Powder__1",
+
+  // Refining Unit Recipes
+  REFINING_UNIT__STABILIZED_CARBON__1: "Refining_Unit__Stabilized_Carbon__1",
+  REFINING_UNIT__DENSE_CARBON_POWDER__1:
+    "Refining_Unit__Dense_Carbon_Powder__1",
+  REFINING_UNIT__DENSE_CARBON_POWDER__2:
+    "Refining_Unit__Dense_Carbon_Powder__2",
+  REFINING_UNIT__CARBON__1: "Refining_Unit__Carbon__1",
+  REFINING_UNIT__CARBON__2: "Refining_Unit__Carbon__2",
+  REFINING_UNIT__CARBON__3: "Refining_Unit__Carbon__3",
+  REFINING_UNIT__CARBON__4: "Refining_Unit__Carbon__4",
+  REFINING_UNIT__CARBON__5: "Refining_Unit__Carbon__5",
+  REFINING_UNIT__CARBON__6: "Refining_Unit__Carbon__6",
+  REFINING_UNIT__CARBON_POWDER__1: "Refining_Unit__Carbon_Powder__1",
+  REFINING_UNIT__CARBON_POWDER__2: "Refining_Unit__Carbon_Powder__2",
+  REFINING_UNIT__CARBON_POWDER__3: "Refining_Unit__Carbon_Powder__3",
+  REFINING_UNIT__CARBON_POWDER__4: "Refining_Unit__Carbon_Powder__4",
+  REFINING_UNIT__CARBON_POWDER__5: "Refining_Unit__Carbon_Powder__5",
+  REFINING_UNIT__PACKED_ORIGOCRUST__1: "Refining_Unit__Packed_Origocrust__1",
+  REFINING_UNIT__DENSE_ORIGOCRUST_POWDER__1:
+    "Refining_Unit__Dense_Origocrust_Powder__1",
+  REFINING_UNIT__ORIGOCRUST_POWDER__1: "Refining_Unit__Origocrust_Powder__1",
+  REFINING_UNIT__ORIGOCRUST__1: "Refining_Unit__Origocrust__1",
+  REFINING_UNIT__ORIGOCRUST__2: "Refining_Unit__Origocrust__2",
+  REFINING_UNIT__STEEL__1: "Refining_Unit__Steel__1",
+  REFINING_UNIT__FERRIUM__1: "Refining_Unit__Ferrium__1",
+  REFINING_UNIT__FERRIUM__2: "Refining_Unit__Ferrium__2",
+  REFINING_UNIT__CRYSTON_FIBER__1: "Refining_Unit__Cryston_Fiber__1",
+  REFINING_UNIT__AMETHYST_FIBER__1: "Refining_Unit__Amethyst_Fiber__1",
+  REFINING_UNIT__AMETHYST_FIBER__2: "Refining_Unit__Amethyst_Fiber__2",
+
+  // Fitting Unit Recipes
+  FITTING_UNIT__CUPRIUM_PART__1: "Fitting_Unit__Cuprium_Part__1",
+  FITTING_UNIT__AMETHYST_PART__1: "Fitting_Unit__Amethyst_Part__1",
+  FITTING_UNIT__CRYSTON_PART__1: "Fitting_Unit__Cryston_Part__1",
+  FITTING_UNIT__FERRIUM_PART__1: "Fitting_Unit__Ferrium_Part__1",
+  FITTING_UNIT__STEEL_PART__1: "Fitting_Unit__Steel_Part__1",
+
+  // Moulding Unit Recipes
+  MOULDING_UNIT__AMETHYST_BOTTLE__1: "Moulding_Unit__Amethyst_Bottle__1",
+  MOULDING_UNIT__CRYSTON_BOTTLE__1: "Moulding_Unit__Cryston_Bottle__1",
+  MOULDING_UNIT__FERRIUM_BOTTLE__1: "Moulding_Unit__Ferrium_Bottle__1",
+  MOULDING_UNIT__STEEL_BOTTLE__1: "Moulding_Unit__Steel_Bottle__1",
+
+  // Planting Unit Recipes
+  PLANTING_UNIT__AKETINE__1: "Planting_Unit__Aketine__1",
+  PLANTING_UNIT__BUCKFLOWER__1: "Planting_Unit__Buckflower__1",
+  PLANTING_UNIT__CITROME__1: "Planting_Unit__Citrome__1",
+  PLANTING_UNIT__SANDLEAF__1: "Planting_Unit__Sandleaf__1",
+
+  // Seed-Picking Unit Recipes
+  SEED_PICKING_UNIT__AKETINE_SEED__1: "Seed-Picking_Unit__Aketine_Seed__1",
+  SEED_PICKING_UNIT__JINCAO_SEED__1: "Seed-Picking_Unit__Jincao_Seed__1",
+  SEED_PICKING_UNIT__YAZHEN_SEED__1: "Seed-Picking_Unit__Yazhen_Seed__1",
+  SEED_PICKING_UNIT__BUCKFLOWER_SEED__1:
+    "Seed-Picking_Unit__Buckflower_Seed__1",
+  SEED_PICKING_UNIT__CITROME_SEED__1: "Seed-Picking_Unit__Citrome_Seed__1",
+  SEED_PICKING_UNIT__SANDLEAF_SEED__1: "Seed-Picking_Unit__Sandleaf_Seed__1",
+  SEED_PICKING_UNIT__REED_RYE_SEED__1: "Seed-Picking_Unit__Reed_Rye_Seed__1",
+  SEED_PICKING_UNIT__TARTPEPPER_SEED__1:
+    "Seed-Picking_Unit__Tartpepper_Seed__1",
+  SEED_PICKING_UNIT__REDJADE_GINSENG_SEED__1:
+    "Seed-Picking_Unit__Redjade_Ginseng_Seed__1",
+  SEED_PICKING_UNIT__AMBER_RICE_SEED__1:
+    "Seed-Picking_Unit__Amber_Rice_Seed__1",
+
+  GRINDING_UNIT__DENSE_CARBON_POWDER__1:
+    "Grinding_Unit__Dense_Carbon_Powder__1",
+  GRINDING_UNIT__DENSE_ORIGOCRUST_POWDER__1:
+    "Grinding_Unit__Dense_Origocrust_Powder__1",
+  GRINDING_UNIT__DENSE_FERRIUM_POWDER__1:
+    "Grinding_Unit__Dense_Ferrium_Powder__1",
+  GRINDING_UNIT__DENSE_ORIGINIUM_POWDER__1:
+    "Grinding_Unit__Dense_Originium_Powder__1",
+  GRINDING_UNIT__GROUND_BUCKFLOWER_POWDER__1:
+    "Grinding_Unit__Ground_Buckflower_Powder__1",
+  GRINDING_UNIT__GROUND_CITROME_POWDER__1:
+    "Grinding_Unit__Ground_Citrome_Powder__1",
+  GRINDING_UNIT__CRYSTON_POWDER__1: "Grinding_Unit__Cryston_Powder__1",
+
+  // Packaging Unit Recipes
+  PACKAGING_UNIT__LC_BATTERY__1: "Packaging_Unit__LC_Battery__1",
+  PACKAGING_UNIT__SC_BATTERY__1: "Packaging_Unit__SC_Battery__1",
+  PACKAGING_UNIT__HC_BATTERY__1: "Packaging_Unit__HC_Battery__1",
+  PACKAGING_UNIT__INDUSTRIAL_EXPLOSIVE__1:
+    "Packaging_Unit__Industrial_Explosive__1",
+
+  // Reactor Crucible Recipes
+  REACTOR_CRUCIBLE__JINCAO_SOLUTION__1: "Reactor_Crucible__Jincao_Solution__1",
+  REACTOR_CRUCIBLE__YAZHEN_SOLUTION__1: "Reactor_Crucible__Yazhen_Solution__1",
+
+  // Filling Unit Recipes
+  FILLING_UNIT__CANNED_CITROME_C__1: "Filling_Unit__Canned_Citrome_(C)__1",
+  FILLING_UNIT__CANNED_CITROME_B__1: "Filling_Unit__Canned_Citrome_(B)__1",
+  FILLING_UNIT__CANNED_CITROME_A__1: "Filling_Unit__Canned_Citrome_(A)__1",
+  FILLING_UNIT__BUCK_CAPSULE_C__1: "Filling_Unit__Buck_Capsule_(C)__1",
+  FILLING_UNIT__BUCK_CAPSULE_B__1: "Filling_Unit__Buck_Capsule_(B)__1",
+  FILLING_UNIT__BUCK_CAPSULE_A__1: "Filling_Unit__Buck_Capsule_(A)__1",
+
+  // Gearing Unit Recipes
+  GEARING_UNIT__AMETHYST_COMPONENT__1: "Gearing_Unit__Amethyst_Component__1",
+  GEARING_UNIT__FERRIUM_COMPONENT__1: "Gearing_Unit__Ferrium_Component__1",
+  GEARING_UNIT__CRYSTON_COMPONENT__1: "Gearing_Unit__Cryston_Component__1",
+  GEARING_UNIT__CUPRIUM_COMPONENT__1: "Gearing_Unit__Cuprium_Component__1",
+} as const;
+type RecipeId = (typeof RecipeId)[keyof typeof RecipeId];
+
+const FacilityId = {
+  SHREDDING_UNIT: "Shredding_Unit",
+  REFINING_UNIT: "Refining_Unit",
+  FITTING_UNIT: "Fitting_Unit",
+  WATER_TREATMENT_UNIT: "Water_Treatment_Unit",
+  MOULDING_UNIT: "Moulding_Unit",
+  PLANTING_UNIT: "Planting_Unit",
+  SEED_PICKING_UNIT: "Seed-Picking_Unit",
+  GRINDING_UNIT: "Grinding_Unit",
+  PACKAGING_UNIT: "Packaging_Unit",
+  REACTOR_CRUCIBLE: "Reactor_Crucible",
+  FILLING_UNIT: "Filling_Unit",
+  GEARING_UNIT: "Gearing_Unit",
+} as const;
+type FacilityId = (typeof FacilityId)[keyof typeof FacilityId];
+
+export { ItemId, RecipeId, FacilityId };
+export type {
+  ItemId as ItemIdType,
+  RecipeId as RecipeIdType,
+  FacilityId as FacilityIdType,
+};
