@@ -244,16 +244,16 @@ const ProductionTable = memo(function ProductionTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[48px] h-9">
+            <TableHead className="w-12 h-9">
               {t("table.headers.icon")}
             </TableHead>
-            <TableHead className="h-9 w-[160px]">
+            <TableHead className="h-9 w-40">
               {t("table.headers.item")}
             </TableHead>
             <TableHead className="h-9 min-w-[400px]">
               {t("table.headers.recipe")}
             </TableHead>
-            <TableHead className="h-9 w-[56px] text-center">
+            <TableHead className="h-9 w-14 text-center">
               {t("table.headers.facility")}
             </TableHead>
             <TableHead className="text-right h-9 w-[90px]">
@@ -330,7 +330,7 @@ const ProductionTable = memo(function ProductionTable({
                           onRecipeChange(line.item.id, value)
                         }
                       >
-                        <SelectTrigger className="h-auto min-h-[32px] text-xs py-1">
+                        <SelectTrigger className="h-auto min-h-8 text-xs py-1">
                           <SelectValue>
                             {selectedRecipe && (
                               <RecipeIOCompact

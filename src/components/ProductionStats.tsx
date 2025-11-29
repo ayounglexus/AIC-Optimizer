@@ -19,14 +19,14 @@ const ProductionStats = memo(function ProductionStats({
 }: ProductionStatsProps) {
   const { t } = useTranslation("stats");
   return (
-    <Card className="flex-shrink-0">
+    <Card className="shrink-0">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (
           <div className="flex items-center gap-2 text-destructive text-sm p-3 bg-destructive/10 rounded">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
         ) : (

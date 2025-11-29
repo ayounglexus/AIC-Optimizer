@@ -151,7 +151,7 @@ export default function App() {
           {/* 右侧面板 */}
           <div className="flex-1 min-w-0">
             <Card className="h-full flex flex-col">
-              <CardHeader className="pb-3 flex-shrink-0">
+              <CardHeader className="pb-3 shrink-0">
                 <CardTitle className="text-base">
                   {t("productionConfig")}
                 </CardTitle>

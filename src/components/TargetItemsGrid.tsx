@@ -81,7 +81,7 @@ const TargetItemsGrid = memo(function TargetItemsGrid({
                     </span>
                   </div>
                 )}
-                <div className="text-xs font-medium text-center line-clamp-2 w-full px-1 min-h-[2rem]">
+                <div className="text-xs font-medium text-center line-clamp-2 w-full px-1 min-h-8">
                   {getItemName(item)}
                 </div>
               </div>

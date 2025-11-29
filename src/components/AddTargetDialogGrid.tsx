@@ -127,7 +127,7 @@ export default function AddTargetDialogGrid({
                   >
                     <div className="p-2 flex flex-row items-center gap-3 h-16">
                       {item.iconUrl ? (
-                        <div className="h-12 w-12 flex-shrink-0 flex items-center justify-center">
+                        <div className="h-12 w-12 shrink-0 flex items-center justify-center">
                           <img
                             src={item.iconUrl}
                             alt={getItemName(item)}
@@ -135,7 +135,7 @@ export default function AddTargetDialogGrid({
                           />
                         </div>
                       ) : (
-                        <div className="h-12 w-12 flex-shrink-0 bg-muted rounded flex items-center justify-center">
+                        <div className="h-12 w-12 shrink-0 bg-muted rounded flex items-center justify-center">
                           <span className="text-xs text-muted-foreground">
                             {t("noIcon")}
                           </span>
