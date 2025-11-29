@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TargetItemsGrid, { type ProductionTarget } from "./TargetItemsGrid";
 import ProductionStats from "./ProductionStats";
 import type { Item } from "@/types";
+import { useTranslation } from "react-i18next";
 
 type LeftPanelProps = {
   targets: ProductionTarget[];
@@ -29,14 +30,15 @@ const LeftPanel = memo(function LeftPanel({
   onAddClick,
   language = "zh-CN",
 }: LeftPanelProps) {
+  const { t } = useTranslation("targets");
   return (
     <div className="w-[420px] flex flex-col gap-4 min-h-0">
       <Card className="flex-shrink-0">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">生产目标</CardTitle>
+            <CardTitle className="text-base">{t("title")}</CardTitle>
             <div className="text-xs text-muted-foreground">
-              {targets.length} / 12
+              {t("count", { current: targets.length, max: 12 })}
             </div>
           </div>
         </CardHeader>

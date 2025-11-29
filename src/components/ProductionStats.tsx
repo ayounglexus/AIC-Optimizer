@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type ProductionStatsProps = {
   totalPowerConsumption: number;
@@ -16,10 +17,11 @@ const ProductionStats = memo(function ProductionStats({
   rawMaterialCount,
   error,
 }: ProductionStatsProps) {
+  const { t } = useTranslation("stats");
   return (
     <Card className="flex-shrink-0">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">生产统计</CardTitle>
+        <CardTitle className="text-base">{t("title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (
@@ -31,20 +33,26 @@ const ProductionStats = memo(function ProductionStats({
           <>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">总功耗</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("totalPower")}
+                </div>
                 <div className="text-lg font-bold">
                   {totalPowerConsumption.toFixed(1)}
                   <span className="text-xs font-normal text-muted-foreground ml-1">
-                    kW
+                    {t("powerUnit")}
                   </span>
                 </div>
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">生产步骤</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("productionSteps")}
+                </div>
                 <div className="text-lg font-bold">{productionSteps}</div>
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">原材料</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("rawMaterials")}
+                </div>
                 <div className="text-lg font-bold">{rawMaterialCount}</div>
               </div>
             </div>

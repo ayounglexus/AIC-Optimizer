@@ -20,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Item, Recipe, Facility, ItemId, RecipeId } from "@/types";
+import { useTranslation } from "react-i18next";
 
 export type ProductionLineData = {
   item: Item;
@@ -45,6 +46,7 @@ const ProductionTable = memo(function ProductionTable({
   onRecipeChange,
   language = "zh-CN",
 }: ProductionTableProps) {
+  const { t } = useTranslation("production");
   const getItemName = (item: Item) => {
     return item.name[language] || item.name.en || item.id;
   };
@@ -58,7 +60,6 @@ const ProductionTable = memo(function ProductionTable({
   };
 
   const formatNumber = (num: number, decimals = 2) => num.toFixed(decimals);
-
   const renderRecipeIOCompact = (recipe: Recipe) => {
     const maxDisplay = 2;
 
@@ -147,15 +148,19 @@ const ProductionTable = memo(function ProductionTable({
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-muted-foreground text-xs">输入:</span>
+          <span className="text-muted-foreground text-xs">
+            {t("recipe.inputs")}:
+          </span>
           {renderItems(recipe.inputs)}
         </div>
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-muted-foreground text-xs">输出:</span>
+          <span className="text-muted-foreground text-xs">
+            {t("recipe.outputs")}:
+          </span>
           {renderItems(recipe.outputs)}
         </div>
         <div className="text-xs text-muted-foreground">
-          时间: {recipe.craftingTime}s
+          {t("recipe.time")}: {recipe.craftingTime}s
         </div>
       </div>
     );
@@ -166,13 +171,25 @@ const ProductionTable = memo(function ProductionTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[50px] h-9">图标</TableHead>
-            <TableHead className="h-9">物品</TableHead>
-            <TableHead className="text-right h-9 w-[90px]">产能/分</TableHead>
-            <TableHead className="h-9 min-w-[300px]">配方</TableHead>
-            <TableHead className="h-9 w-[60px] text-center">设施</TableHead>
-            <TableHead className="text-right h-9 w-[70px]">数量</TableHead>
-            <TableHead className="text-right h-9 w-[80px]">功耗(kW)</TableHead>
+            <TableHead className="w-[50px] h-9">
+              {t("table.headers.icon")}
+            </TableHead>
+            <TableHead className="h-9">{t("table.headers.item")}</TableHead>
+            <TableHead className="text-right h-9 w-[90px]">
+              {t("table.headers.outputRate")}
+            </TableHead>
+            <TableHead className="h-9 min-w-[300px]">
+              {t("table.headers.recipe")}
+            </TableHead>
+            <TableHead className="h-9 w-[60px] text-center">
+              {t("table.headers.facility")}
+            </TableHead>
+            <TableHead className="text-right h-9 w-[70px]">
+              {t("table.headers.count")}
+            </TableHead>
+            <TableHead className="text-right h-9 w-[80px]">
+              {t("table.headers.power")}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -182,7 +199,7 @@ const ProductionTable = memo(function ProductionTable({
                 colSpan={7}
                 className="text-center text-muted-foreground h-32"
               >
-                暂无数据
+                {t("table.noData")}
               </TableCell>
             </TableRow>
           ) : (
@@ -225,7 +242,7 @@ const ProductionTable = memo(function ProductionTable({
                   <TableCell className="p-2">
                     {line.isRawMaterial ? (
                       <div className="text-xs text-muted-foreground">
-                        原材料
+                        {t("table.rawMaterial")}
                       </div>
                     ) : line.availableRecipes.length > 1 ? (
                       <Select
@@ -275,7 +292,7 @@ const ProductionTable = memo(function ProductionTable({
                       </Tooltip>
                     ) : (
                       <div className="text-xs text-muted-foreground">
-                        无配方
+                        {t("table.noRecipe")}
                       </div>
                     )}
                   </TableCell>

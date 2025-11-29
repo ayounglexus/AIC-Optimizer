@@ -7,10 +7,23 @@ import AddTargetDialogGrid from "./components/AddTargetDialogGrid";
 import LeftPanel from "./components/LeftPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ItemId, RecipeId } from "@/types";
 import type { ProductionLineData } from "./components/ProductionTable";
+import { useTranslation } from "react-i18next";
 
 export default function App() {
+  const { t, i18n } = useTranslation("app");
+
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+  };
   const [targets, setTargets] = useState<ProductionTarget[]>([]);
   const [recipeOverrides, setRecipeOverrides] = useState<Map<ItemId, RecipeId>>(
     new Map(),
@@ -92,20 +105,33 @@ export default function App() {
       <div className="h-screen flex flex-col p-4 gap-4">
         {/* 顶部标题栏 */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">終末地工厂生产计算器</h1>
-          <a
-            href="https://github.com/JamboChen/endfield-tool"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <img
-              height="16"
-              width="16"
-              src="https://cdn.simpleicons.org/github/181717"
-            />
-            <span>GitHub</span>
-          </a>
+          <h1 className="text-2xl font-bold">{t("title")}</h1>
+          <div className="flex items-center gap-4">
+            {/* 语言切换按钮 */}
+            <Select value={i18n.language} onValueChange={handleLanguageChange}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="zh-Hans">简体中文</SelectItem>
+                <SelectItem value="zh-Hant">繁體中文</SelectItem>
+              </SelectContent>
+            </Select>
+            <a
+              href="https://github.com/JamboChen/endfield-tool"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <img
+                height="16"
+                width="16"
+                src="https://cdn.simpleicons.org/github/181717"
+              />
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
 
         <div className="flex-1 flex gap-4 min-h-0">
@@ -120,14 +146,16 @@ export default function App() {
             onTargetChange={handleTargetChange}
             onTargetRemove={handleTargetRemove}
             onAddClick={handleAddClick}
-            language="zh-CN"
+            language={i18n.language as "en" | "zh-CN" | "zh-TW"}
           />
 
           {/* 右侧面板 */}
           <div className="flex-1 min-w-0">
             <Card className="h-full flex flex-col">
               <CardHeader className="pb-3 flex-shrink-0">
-                <CardTitle className="text-base">生产线配置</CardTitle>
+                <CardTitle className="text-base">
+                  {t("productionConfig")}
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 min-h-0 overflow-auto">
                 <ProductionTable
@@ -135,7 +163,7 @@ export default function App() {
                   items={items}
                   facilities={facilities}
                   onRecipeChange={handleRecipeChange}
-                  language="zh-CN"
+                  language={i18n.language as "en" | "zh-CN" | "zh-TW"}
                 />
               </CardContent>
             </Card>
@@ -148,7 +176,7 @@ export default function App() {
           items={items}
           existingTargetIds={targets.map((t) => t.itemId)}
           onAddTarget={handleAddTarget}
-          language="zh-CN"
+          language={i18n.language as "en" | "zh-CN" | "zh-TW"}
         />
       </div>
     </TooltipProvider>

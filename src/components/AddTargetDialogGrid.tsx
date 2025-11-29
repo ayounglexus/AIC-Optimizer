@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import type { Item, ItemId } from "@/types";
+import { useTranslation } from "react-i18next";
 
 type AddTargetDialogGridProps = {
   open: boolean;
@@ -30,6 +31,7 @@ export default function AddTargetDialogGrid({
   onAddTarget,
   language = "zh-CN",
 }: AddTargetDialogGridProps) {
+  const { t } = useTranslation("dialog");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemId, setSelectedItemId] = useState<ItemId | null>(null);
   const [defaultRate, setDefaultRate] = useState(10);
@@ -72,7 +74,7 @@ export default function AddTargetDialogGrid({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[85vh] flex flex-col overflow-y-scroll">
         <DialogHeader>
-          <DialogTitle>选择目标物品</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 flex-1 min-h-0 flex flex-col">
@@ -81,14 +83,16 @@ export default function AddTargetDialogGrid({
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="搜索物品..."
+                placeholder={t("searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm whitespace-nowrap">默认产量:</Label>
+              <Label className="text-sm whitespace-nowrap">
+                {t("defaultRate")}:
+              </Label>
               <Input
                 type="number"
                 value={defaultRate}
@@ -98,7 +102,7 @@ export default function AddTargetDialogGrid({
                 step="0.1"
               />
               <span className="text-sm text-muted-foreground whitespace-nowrap">
-                个/分
+                {t("rateUnit")}
               </span>
             </div>
           </div>
@@ -109,8 +113,8 @@ export default function AddTargetDialogGrid({
               <div className="flex items-center justify-center h-64">
                 <p className="text-muted-foreground">
                   {availableItems.length === 0
-                    ? "所有物品都已添加"
-                    : "未找到匹配的物品"}
+                    ? t("allItemsAdded")
+                    : t("noMatchingItems")}
                 </p>
               </div>
             ) : (
@@ -138,7 +142,7 @@ export default function AddTargetDialogGrid({
                       ) : (
                         <div className="h-12 w-12 flex-shrink-0 bg-muted rounded flex items-center justify-center">
                           <span className="text-xs text-muted-foreground">
-                            无
+                            {t("noIcon")}
                           </span>
                         </div>
                       )}
@@ -155,17 +159,18 @@ export default function AddTargetDialogGrid({
           {/* 底部提示和按钮 */}
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="text-xs text-muted-foreground">
-              💡 双击物品可快速添加 | 已选择:{" "}
-              {selectedItemId
-                ? getItemName(items.find((i) => i.id === selectedItemId)!)
-                : "无"}
+              {t("hint", {
+                selected: selectedItemId
+                  ? getItemName(items.find((i) => i.id === selectedItemId)!)
+                  : t("noneSelected"),
+              })}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
-                取消
+                {t("cancel")}
               </Button>
               <Button onClick={handleAddTarget} disabled={!selectedItemId}>
-                添加
+                {t("add")}
               </Button>
             </div>
           </div>
