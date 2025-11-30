@@ -1,4 +1,7 @@
-import { calculateMultipleTargets } from "./lib/calculator";
+import {
+  calculateProductionPlan,
+  type UnifiedProductionPlan,
+} from "./lib/calculator";
 import { items, recipes, facilities } from "./data";
 import { useState, useMemo, useCallback } from "react";
 import ProductionTable from "./components/ProductionTable";
@@ -31,13 +34,14 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { plan, tableData, error } = useMemo(() => {
-    let plan = null;
+    // 声明 plan 的类型为新的 UnifiedProductionPlan
+    let plan: UnifiedProductionPlan | null = null; // 👈 改变这里的类型
     let tableData: ProductionLineData[] = [];
     let error: string | null = null;
 
     try {
       if (targets.length > 0) {
-        plan = calculateMultipleTargets(
+        plan = calculateProductionPlan(
           targets,
           items,
           recipes,
@@ -62,11 +66,11 @@ export default function App() {
         });
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : "计算错误";
+      error = e instanceof Error ? e.message : t("calculationError");
     }
 
     return { plan, tableData, error };
-  }, [targets, recipeOverrides]);
+  }, [targets, recipeOverrides, t]);
 
   const handleTargetChange = useCallback((index: number, rate: number) => {
     setTargets((prev) => {

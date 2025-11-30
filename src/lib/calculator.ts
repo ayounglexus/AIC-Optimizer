@@ -7,6 +7,10 @@ import type {
   FacilityId,
 } from "@/types";
 
+/**
+ * Represents a single step in the production chain.
+ * This is the building block for the dependency tree.
+ */
 export type ProductionNode = {
   item: Item;
   targetRate: number;
@@ -17,10 +21,18 @@ export type ProductionNode = {
   dependencies: ProductionNode[];
 };
 
-export type ProductionPlan = {
-  rootNode: ProductionNode;
+/**
+ * The unified output structure for the production plan.
+ * It contains both the raw dependency trees and the merged/flattened list for statistics.
+ */
+export type UnifiedProductionPlan = {
+  /** The unmerged root nodes, suitable for dependency tree visualization. */
+  dependencyRootNodes: ProductionNode[];
+  /** The merged and sorted list of production steps, suitable for tables and statistics. */
   flatList: ProductionNode[];
+  /** Total electrical power consumption for all facilities. */
   totalPowerConsumption: number;
+  /** Map of ItemId to the required rate of raw materials (items with no recipes). */
   rawMaterialRequirements: Map<ItemId, number>;
 };
 
@@ -45,6 +57,7 @@ type MergedNode = {
   facility: Facility | null;
   totalFacilityCount: number;
   isRawMaterial: boolean;
+  // Set of keys for nodes this MergedNode depends on
   dependencies: Set<string>;
 };
 
@@ -77,6 +90,8 @@ function isCircularDependency(
   node: ProductionNode,
   producedItemIds: Set<ItemId>,
 ): boolean {
+  // A node is a circular dependency if it's marked as a raw material,
+  // but it is an item that is actually produced somewhere else in the graph.
   return node.isRawMaterial && producedItemIds.has(node.item.id);
 }
 
@@ -88,7 +103,8 @@ function mergeProductionNodes(
   const mergedNodes = new Map<string, MergedNode>();
 
   const collectNodes = (node: ProductionNode) => {
-    // Skip nodes that are already marked as circular dependency pseudo-raw-materials.
+    // Skip nodes that are already marked as circular dependency pseudo-raw-materials,
+    // unless they are true raw materials (which are never in producedItemIds).
     if (isCircularDependency(node, producedItemIds)) {
       return;
     }
@@ -103,6 +119,8 @@ function mergeProductionNodes(
     if (existing) {
       existing.totalRate += node.targetRate;
       existing.totalFacilityCount += node.facilityCount;
+
+      // Collect dependencies from the new node
       node.dependencies.forEach((dep) => {
         if (!isCircularDependency(dep, producedItemIds)) {
           const depKey = createNodeKey(
@@ -114,6 +132,7 @@ function mergeProductionNodes(
         }
       });
     } else {
+      // Create a new merged node
       const dependencies = new Set<string>();
       node.dependencies.forEach((dep) => {
         if (!isCircularDependency(dep, producedItemIds)) {
@@ -137,6 +156,7 @@ function mergeProductionNodes(
       });
     }
 
+    // Recursively collect dependencies of the current node
     node.dependencies.forEach(collectNodes);
   };
 
@@ -145,29 +165,28 @@ function mergeProductionNodes(
 }
 
 /**
- * Performs a topological sort on merged production nodes using Kahn's algorithm.
+ * Performs a topological sort on merged production nodes.
  * The sort order is from producers (raw materials) to consumers (final products).
- * It calculates in-degrees (number of consumers) to determine the processing order.
  */
 function topologicalSort(mergedNodes: Map<string, MergedNode>): string[] {
   const sortedKeys: string[] = [];
   const inDegree = new Map<string, number>();
   const keyToNode = new Map(mergedNodes);
 
-  // Initialize in-degrees for all nodes to zero. An "in-degree" here signifies the number of consumers
-  // that depend on a given producer node. We want to process final products (consumers with 0 in-degree) first.
+  // Initialize in-degrees (number of consumers)
   keyToNode.forEach((_, key) => inDegree.set(key, 0));
 
+  // Calculate initial in-degrees
   keyToNode.forEach((node) => {
     node.dependencies.forEach((depKey) => {
-      // Increment the in-degree of the dependency (producer) as the current node (consumer) relies on it.
+      // Increment the in-degree of the dependency (producer)
       if (keyToNode.has(depKey)) {
         inDegree.set(depKey, (inDegree.get(depKey) || 0) + 1);
       }
     });
   });
 
-  // Initialize the queue with nodes that have no consumers (in-degree of 0).
+  // Initialize the queue with nodes that have no consumers (in-degree of 0), these are the final products.
   const queue: string[] = [];
   keyToNode.forEach((_, key) => {
     if (inDegree.get(key) === 0) {
@@ -175,7 +194,7 @@ function topologicalSort(mergedNodes: Map<string, MergedNode>): string[] {
     }
   });
 
-  // Process nodes from consumers to producers.
+  // Process nodes from consumers to producers (reverse order of final output)
   while (queue.length > 0) {
     const key = queue.shift()!;
     sortedKeys.push(key);
@@ -213,6 +232,7 @@ function calculateNodeLevels(
     }
 
     const node = mergedNodes.get(key);
+    // Base case: raw material or node with no dependencies is level 0
     if (!node || node.dependencies.size === 0) {
       keyToLevel.set(key, 0);
       return 0;
@@ -230,6 +250,7 @@ function calculateNodeLevels(
     return level;
   };
 
+  // Calculate levels in the topologically sorted order
   sortedKeys.forEach((key) => calculateLevel(key));
   return keyToLevel;
 }
@@ -250,11 +271,13 @@ function sortByLevelAndTier(
     levels.get(level)!.push(key);
   });
 
+  // Sort levels from deepest (highest number) to shallowest (0)
   const sortedLevels = Array.from(levels.keys()).sort((a, b) => b - a);
 
   const result: string[] = [];
   sortedLevels.forEach((level) => {
     const keysInLevel = levels.get(level)!;
+    // Sort items within the same level by their tier (higher tier first)
     keysInLevel.sort((a, b) => {
       const nodeA = mergedNodes.get(a)!;
       const nodeB = mergedNodes.get(b)!;
@@ -266,12 +289,13 @@ function sortByLevelAndTier(
   return result;
 }
 
-/** Constructs the final ProductionPlan object from the merged and sorted production nodes. */
-function buildFinalPlan(
+/** * Constructs the final flattened plan components (list, power, raw materials)
+ * from the merged and sorted production nodes.
+ */
+function buildFinalPlanComponents(
   sortedKeys: string[],
   mergedNodes: Map<string, MergedNode>,
-  rootNode: ProductionNode,
-): ProductionPlan {
+): Omit<UnifiedProductionPlan, "dependencyRootNodes"> {
   const rawMaterialRequirements = new Map<ItemId, number>();
   let totalPowerConsumption = 0;
   const flatList: ProductionNode[] = [];
@@ -280,15 +304,18 @@ function buildFinalPlan(
     const node = mergedNodes.get(key)!;
 
     if (node.isRawMaterial) {
+      // Aggregate raw material requirements
       rawMaterialRequirements.set(
         node.item.id,
         (rawMaterialRequirements.get(node.item.id) || 0) + node.totalRate,
       );
     } else if (node.facility) {
+      // Calculate total power consumption
       totalPowerConsumption +=
         node.facility.powerConsumption * node.totalFacilityCount;
     }
 
+    // Create the final ProductionNode for the flattened list
     flatList.push({
       item: node.item,
       targetRate: node.totalRate,
@@ -296,11 +323,11 @@ function buildFinalPlan(
       facility: node.facility,
       facilityCount: node.totalFacilityCount,
       isRawMaterial: node.isRawMaterial,
-      dependencies: [],
+      dependencies: [], // Dependencies are not needed in the flat list
     });
   });
 
-  return { rootNode, flatList, totalPowerConsumption, rawMaterialRequirements };
+  return { flatList, totalPowerConsumption, rawMaterialRequirements };
 }
 
 /**
@@ -318,8 +345,8 @@ function calculateNode(
   const item = maps.itemMap.get(itemId);
   if (!item) throw new Error(`Item not found: ${itemId}`);
 
-  // If this item is already in the current processing path, it indicates a circular dependency.
-  // Treat it as a raw material for this specific branch to break the cycle.
+  // Check for circular dependency: If the item is already being processed up the chain,
+  // treat it as a raw material for this branch to break the cycle.
   if (visitedPath.has(itemId)) {
     return {
       item,
@@ -327,7 +354,7 @@ function calculateNode(
       recipe: null,
       facility: null,
       facilityCount: 0,
-      isRawMaterial: true,
+      isRawMaterial: true, // Pseudo-raw material to break the loop
       dependencies: [],
     };
   }
@@ -336,6 +363,7 @@ function calculateNode(
     r.outputs.some((o) => o.itemId === itemId),
   );
 
+  // If no recipe is found, treat the item as a true raw material
   if (availableRecipes.length === 0) {
     return {
       item,
@@ -348,6 +376,7 @@ function calculateNode(
     };
   }
 
+  // Recipe selection logic (override takes precedence over selector)
   let selectedRecipe: Recipe;
   if (recipeOverrides?.has(itemId)) {
     const overrideRecipe = maps.recipeMap.get(recipeOverrides.get(itemId)!);
@@ -362,18 +391,22 @@ function calculateNode(
   if (!facility)
     throw new Error(`Facility not found: ${selectedRecipe.facilityId}`);
 
+  // Production rate calculation
   const outputAmount =
     selectedRecipe.outputs.find((o) => o.itemId === itemId)?.amount || 0;
   const cyclesPerMinute = 60 / selectedRecipe.craftingTime;
   const outputRatePerFacility = outputAmount * cyclesPerMinute;
 
+  // Calculate required facilities
   const facilityCount = requiredRate / outputRatePerFacility;
 
-  // Add the current item to the visited path to detect circular dependencies in subsequent recursive calls.
+  // Add the current item to the visited path for dependency detection
   const newVisitedPath = new Set(visitedPath);
   newVisitedPath.add(itemId);
 
+  // Recursively calculate dependencies (inputs)
   const dependencies = selectedRecipe.inputs.map((input) => {
+    // Calculate the required input rate for the total facility count
     const inputRate = input.amount * cyclesPerMinute * facilityCount;
     return calculateNode(
       input.itemId,
@@ -397,53 +430,51 @@ function calculateNode(
 }
 
 /**
- * Calculates a complete production plan for a single target item at a specified rate.
- * The plan includes raw material requirements, total power consumption, and a detailed list of production steps.
+ * Generates the raw, unmerged dependency trees for all targets.
  */
-export function calculateProductionLine(
-  targetItemId: ItemId,
-  targetRate: number,
-  items: Item[],
-  recipes: Recipe[],
-  facilities: Facility[],
+function buildDependencyTree(
+  targets: Array<{ itemId: ItemId; rate: number }>,
+  maps: ProductionMaps,
   recipeOverrides?: Map<ItemId, RecipeId>,
   recipeSelector: RecipeSelector = defaultRecipeSelector,
-): ProductionPlan {
-  // Create lookup maps for efficient access to items, recipes, and facilities.
-  const maps: ProductionMaps = {
-    itemMap: new Map(items.map((i) => [i.id, i])),
-    recipeMap: new Map(recipes.map((r) => [r.id, r])),
-    facilityMap: new Map(facilities.map((f) => [f.id, f])),
-  };
-
-  const rootNode = calculateNode(
-    targetItemId,
-    targetRate,
-    maps,
-    recipeOverrides,
-    recipeSelector,
+): ProductionNode[] {
+  return targets.map((t) =>
+    calculateNode(t.itemId, t.rate, maps, recipeOverrides, recipeSelector),
   );
-
-  const producedItemIds = collectProducedItems([rootNode]);
-  const mergedNodes = mergeProductionNodes([rootNode], producedItemIds);
-  const sortedKeys = topologicalSort(mergedNodes);
-  const sortedByLevelAndTier = sortByLevelAndTier(sortedKeys, mergedNodes);
-
-  return buildFinalPlan(sortedByLevelAndTier, mergedNodes, rootNode);
 }
 
 /**
- * Calculates a combined production plan for multiple target items at specified rates.
- * This function merges the requirements of all targets into a single, optimized production flow.
+ * Processes the raw dependency trees to create a merged, sorted, and flattened production plan.
  */
-export function calculateMultipleTargets(
+function processMergedPlan(
+  rootNodes: ProductionNode[],
+): Omit<UnifiedProductionPlan, "dependencyRootNodes"> {
+  // 1. Identify all items that are produced by any recipe within the entire production graph.
+  const producedItemIds = collectProducedItems(rootNodes);
+
+  // 2. Merge duplicate production steps and aggregate requirements.
+  const mergedNodes = mergeProductionNodes(rootNodes, producedItemIds);
+
+  // 3. Sort the merged nodes for a logical flow (producer -> consumer) and better display.
+  const sortedKeys = topologicalSort(mergedNodes);
+  const sortedByLevelAndTier = sortByLevelAndTier(sortedKeys, mergedNodes);
+
+  // 4. Build the final flat list and calculate statistics.
+  return buildFinalPlanComponents(sortedByLevelAndTier, mergedNodes);
+}
+
+/**
+ * Calculates a complete production plan for multiple target items at specified rates.
+ * The output includes the raw dependency trees (for visualization) and the merged flat list (for statistics).
+ */
+export function calculateProductionPlan(
   targets: Array<{ itemId: ItemId; rate: number }>,
   items: Item[],
   recipes: Recipe[],
   facilities: Facility[],
   recipeOverrides?: Map<ItemId, RecipeId>,
   recipeSelector: RecipeSelector = defaultRecipeSelector,
-): ProductionPlan {
+): UnifiedProductionPlan {
   if (targets.length === 0) throw new Error("No targets specified");
 
   // Create lookup maps for efficient access to items, recipes, and facilities.
@@ -453,43 +484,23 @@ export function calculateMultipleTargets(
     facilityMap: new Map(facilities.map((f) => [f.id, f])),
   };
 
-  if (targets.length === 1)
-    return calculateProductionLine(
-      targets[0].itemId,
-      targets[0].rate,
-      items,
-      recipes,
-      facilities,
-      recipeOverrides,
-      recipeSelector,
-    );
-
-  // Generate individual production node trees for each target.
-  const rootNodes = targets.map((t) =>
-    calculateNode(t.itemId, t.rate, maps, recipeOverrides, recipeSelector),
+  // 1. Build the raw, unmerged dependency tree(s).
+  const dependencyRootNodes = buildDependencyTree(
+    targets,
+    maps,
+    recipeOverrides,
+    recipeSelector,
   );
 
-  // Identify all items that are produced by any recipe within the entire production graph.
-  const producedItemIds = collectProducedItems(rootNodes);
+  // 2. Process the merged and flattened plan for statistics and tables.
+  const { flatList, totalPowerConsumption, rawMaterialRequirements } =
+    processMergedPlan(dependencyRootNodes);
 
-  const mergedNodes = mergeProductionNodes(rootNodes, producedItemIds);
-
-  const sortedKeys = topologicalSort(mergedNodes);
-  const sortedByLevelAndTier = sortByLevelAndTier(sortedKeys, mergedNodes);
-
-  // Create a placeholder root node for the combined production plan.
-  const rootNode: ProductionNode = {
-    item: {
-      id: "__multi_target__" as ItemId,
-      tier: 0,
-    },
-    targetRate: 0,
-    recipe: null,
-    facility: null,
-    facilityCount: 0,
-    isRawMaterial: false,
-    dependencies: [],
+  // 3. Return the unified plan.
+  return {
+    dependencyRootNodes,
+    flatList,
+    totalPowerConsumption,
+    rawMaterialRequirements,
   };
-
-  return buildFinalPlan(sortedByLevelAndTier, mergedNodes, rootNode);
 }
