@@ -2,38 +2,21 @@
 
 [中文](./README_zh.md)
 
-## What is this 🎮
+## Project Overview
 
-Endfield Tool is a production‑planning and facility‑calculator web app for players of "Arknights: Endfield".  
-It helps you plan and optimize resource production: building facilities, crafting items, managing recipes, and calculating required raw materials and production time.
+Endfield Tool is a production planning and facility calculation tool for **Arknights: Endfield**.  
+It helps players plan and optimize resource production: building facilities, crafting items, managing recipes, and calculating required raw materials and production time.
 
-## Features
+## Main Features
+- One-click view of items and recipes: browse craftable items in the game along with their input/output recipes and production times.
+- Production targets and planning: add target outputs (target item and quantity); the tool will automatically expand the required recipe chain and calculate total raw material needs.
+- Facility and capacity estimation: shows required facility types and recommended counts to help you schedule construction and allocate resources.
+- Real-time interaction: adjust target quantities, switch recipes or facilities, and the page will instantly recalculate and display results.
+- Multi-language support: the interface includes localized text for Chinese, English, etc. (implemented via the project's internal i18n).
 
-- **Facility Management**: view and manage different production facilities.
-- **Items & Recipes**: browse craftable items and their recipes.
-- **Production Planning**: calculate raw materials and production chains for target items.
-- **Intuitive UI**: interactive interface to adjust production quantities and automatically recalculate requirements.
+## Contribution
 
-## Install & Run
-
-```bash
-git clone https://github.com/JamboChen/endfield-tool.git
-cd endfield-tool
-pnpm install
-pnpm dev
-pnpm build
-```
-
-## Usage
-
-1. Start the app.
-2. Select target items to produce.
-3. See required facilities, raw materials, and production time.
-4. Adjust quantities to re‑calculate resources.
-
-## Contributing
-
-Contributions are welcome! Feel free to open issues or pull requests if you find bugs or have improvement suggestions.
+Contributions are welcome! If you find bugs or have improvement suggestions, please feel free to open an issue or submit a pull request.
 
 ## License
 
@@ -43,6 +26,5 @@ MIT
 
 ## Data Source & Disclaimer
 
-- **Data Source**: All item, recipe, and facility data is sourced from [endfield.wiki.gg](https://endfield.wiki.gg).
-- **No Guarantee of Accuracy**: I do **not** have official game-test access. The tool’s outputs are based solely on wiki data and should be considered **estimates only**.
-  Use at your own discretion.
+- **Data Source**: All item, recipe, and facility data are taken from [endfield.wiki.gg](https://endfield.wiki.gg).
+- **Accuracy Notice**: I have not personally tested the game. The tool's outputs are based solely on wiki data and are **for reference only**; please use them responsibly.
