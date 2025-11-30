@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -67,7 +66,7 @@ export default function AddTargetDialogGrid({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[85vh] flex flex-col overflow-y-scroll">
+      <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{t("title")}</DialogTitle>
         </DialogHeader>
@@ -102,10 +101,9 @@ export default function AddTargetDialogGrid({
             </div>
           </div>
 
-          {/* 物品网格 */}
-          <ScrollArea className="flex-1 rounded-md border p-3">
+          <div className="flex-1 rounded-md border overflow-auto">
             {filteredItems.length === 0 ? (
-              <div className="flex items-center justify-center h-64">
+              <div className="flex items-center justify-center h-full min-h-[400px]">
                 <p className="text-muted-foreground">
                   {availableItems.length === 0
                     ? t("allItemsAdded")
@@ -113,52 +111,34 @@ export default function AddTargetDialogGrid({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="p-3 grid grid-cols-5 xl:grid-cols-6 gap-3">
                 {filteredItems.map((item) => (
-                  <Card
+                  <ItemCard
                     key={item.id}
-                    className={`cursor-pointer hover:shadow-md transition-all ${
-                      selectedItemId === item.id
-                        ? "ring-2 ring-primary bg-accent"
-                        : "hover:bg-accent/50"
-                    }`}
+                    item={item}
+                    isSelected={selectedItemId === item.id}
                     onClick={() => handleItemClick(item.id)}
                     onDoubleClick={() => handleItemDoubleClick(item.id)}
-                  >
-                    <div className="p-2 flex flex-row items-center gap-3 h-16">
-                      {item.iconUrl ? (
-                        <div className="h-12 w-12 shrink-0 flex items-center justify-center">
-                          <img
-                            src={item.iconUrl}
-                            alt={getItemName(item)}
-                            className="h-full w-full object-contain"
-                          />
-                        </div>
-                      ) : (
-                        <div className="h-12 w-12 shrink-0 bg-muted rounded flex items-center justify-center">
-                          <span className="text-xs text-muted-foreground">
-                            {t("noIcon")}
-                          </span>
-                        </div>
-                      )}
-                      <div className="text-sm text-left line-clamp-2 flex-1 min-w-0">
-                        {getItemName(item)}
-                      </div>
-                    </div>
-                  </Card>
+                  />
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
 
           {/* 底部提示和按钮 */}
-          <div className="flex items-center justify-between pt-2 border-t">
+          <div className="flex items-center justify-between pt-3 border-t shrink-0">
             <div className="text-xs text-muted-foreground">
-              {t("hint", {
-                selected: selectedItemId
-                  ? getItemName(items.find((i) => i.id === selectedItemId)!)
-                  : t("noneSelected"),
-              })}
+              {selectedItemId ? (
+                <span>
+                  {t("hint", {
+                    selected: getItemName(
+                      items.find((i) => i.id === selectedItemId)!,
+                    ),
+                  })}
+                </span>
+              ) : (
+                <span>{t("clickToSelectDoubleClickToAdd")}</span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -172,5 +152,45 @@ export default function AddTargetDialogGrid({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type ItemCardProps = {
+  item: Item;
+  isSelected: boolean;
+  onClick: () => void;
+  onDoubleClick: () => void;
+};
+
+function ItemCard({ item, isSelected, onClick, onDoubleClick }: ItemCardProps) {
+  const { t } = useTranslation("dialog");
+
+  return (
+    <Card
+      className={`cursor-pointer transition-all aspect-square ${
+        isSelected
+          ? "ring-2 ring-primary bg-primary/10 shadow-md"
+          : "hover:bg-accent/50 hover:shadow"
+      }`}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      title={getItemName(item)}
+    >
+      <div className="p-4 flex items-center justify-center h-full">
+        {item.iconUrl ? (
+          <div className="h-16 w-16 shrink-0 flex items-center justify-center">
+            <img
+              src={item.iconUrl}
+              alt={getItemName(item)}
+              className="h-full w-full object-contain"
+            />
+          </div>
+        ) : (
+          <div className="h-16 w-16 shrink-0 bg-muted rounded flex items-center justify-center">
+            <span className="text-xs text-muted-foreground">{t("noIcon")}</span>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
