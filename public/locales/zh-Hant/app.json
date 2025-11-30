@@ -1,6 +1,8 @@
 {
   "calculationError": "計算生產計畫時發生錯誤。請檢查您的目標產出和配方覆蓋設定。",
   "tabs": {
+    "merged": "合並",
+    "separated": "分離",
     "table": "生產列表",
     "tree": "依賴關係圖"
   },

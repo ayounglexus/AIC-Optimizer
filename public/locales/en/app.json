@@ -1,6 +1,8 @@
 {
   "calculationError": "An error occurred during production plan calculation. Please check your targets and recipe overrides.",
   "tabs": {
+    "merged": "Merged",
+    "separated": "Separated",
     "table": "Production Table",
     "tree": "Dependency Tree"
   },

@@ -9,55 +9,72 @@ import { ItemIcon } from "./ProductionTable";
 import { RecipeIOFull } from "./ProductionTable";
 import { getItemName, getFacilityName } from "@/lib/i18n-helpers";
 import { useTranslation } from "react-i18next";
-import type { Item, Facility } from "@/types";
-import type { ProductionNode } from "@/lib/calculator";
+import type { FlowNodeData, FlowNodeDataSeparated } from "./flow-mapping/types";
 
 /**
- * Interface for the data expected by the CustomProductionNode.
+ * Type alias for a React Flow node containing production data.
+ * Can be either base FlowNodeData (merged mode) or FlowNodeDataSeparated (separated mode).
  */
-export interface FlowNodeData {
-  productionNode: ProductionNode;
-  isCircular: boolean;
-  items: Item[];
-  facilities: Facility[];
-  [key: string]: unknown;
-}
+export type FlowProductionNode = Node<FlowNodeData | FlowNodeDataSeparated>;
 
-export type FlowProductionNode = Node<FlowNodeData>;
 /**
  * Formats a number to a fixed number of decimal places.
- * @param num The number to format.
- * @param decimals The number of decimal places. Defaults to 2.
- * @returns The formatted number as a string.
+ *
+ * @param num The number to format
+ * @param decimals The number of decimal places. Defaults to 2
+ * @returns The formatted number as a string
  */
 const formatNumber = (num: number, decimals = 2): string => {
   return num.toFixed(decimals);
 };
 
 /**
+ * Type guard to check if node data is from separated mode.
+ *
+ * @param data The node data to check
+ * @returns True if the data includes separated mode fields
+ */
+function isSeparatedMode(
+  data: FlowNodeData | FlowNodeDataSeparated,
+): data is FlowNodeDataSeparated {
+  return "facilityIndex" in data && data.facilityIndex !== undefined;
+}
+
+/**
  * CustomProductionNode component renders a single production node in the dependency tree.
- * It displays item information, production rate, facility details, and highlights circular dependencies.
- * @param {NodeProps<FlowNodeData>} props The properties for the custom node.
- * @returns A React component representing a production node.
+ *
+ * The component adapts its display based on the visualization mode:
+ * - Merged mode: Shows aggregated facility counts (e.g., "×2.5")
+ * - Separated mode: Shows individual facility index (e.g., "1/3") and partial load status
+ *
+ * It displays item information, production rate, facility details, and highlights
+ * circular dependencies and partial load conditions.
+ *
+ * @param {NodeProps<FlowProductionNode>} props The properties for the custom node
+ * @returns A React component representing a production node
  */
 export default function CustomProductionNode({
   data,
-  sourcePosition = Position.Right, // Default source handle position
-  targetPosition = Position.Left, // Default target handle position
+  sourcePosition = Position.Right,
+  targetPosition = Position.Left,
 }: NodeProps<FlowProductionNode>) {
   const { productionNode: node, isCircular, items } = data;
   const { t } = useTranslation("production");
 
   /**
    * Helper function to find an item by its ID from the provided items array.
-   * @param itemId The ID of the item to find.
-   * @returns The Item object or undefined if not found.
+   *
+   * @param itemId The ID of the item to find
+   * @returns The Item object or undefined if not found
    */
   const getItemById = (itemId: string) => items.find((i) => i.id === itemId);
 
   const itemName = getItemName(node.item);
   const facility = node.facility;
   const facilityName = facility ? getFacilityName(facility) : "";
+
+  // Check if this is separated mode data
+  const isSeparated = isSeparatedMode(data);
 
   // Adjust border colors based on node type for better visual distinction
   let borderColor = "border-gray-300 dark:border-gray-600";
@@ -91,15 +108,34 @@ export default function CustomProductionNode({
               <div className="text-muted-foreground">
                 {t("tree.facility")}: {facilityName}
               </div>
-              <div className="text-muted-foreground">
-                {t("tree.power")}: {facility.powerConsumption} MW ×{" "}
-                {formatNumber(node.facilityCount, 1)} ={" "}
-                {formatNumber(
-                  facility.powerConsumption * node.facilityCount,
-                  1,
-                )}{" "}
-                MW
-              </div>
+              {isSeparated ? (
+                // Separated mode: show individual facility info
+                <>
+                  <div className="text-muted-foreground">
+                    {t("tree.facilityIndex")}: {data.facilityIndex! + 1} /{" "}
+                    {data.totalFacilities}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {t("tree.power")}: {facility.powerConsumption} MW
+                  </div>
+                  {data.isPartialLoad && (
+                    <div className="text-yellow-600 dark:text-yellow-400 text-xs mt-1">
+                      ⚡ {t("tree.partialLoad")}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Merged mode: show total power
+                <div className="text-muted-foreground">
+                  {t("tree.power")}: {facility.powerConsumption} MW ×{" "}
+                  {formatNumber(node.facilityCount, 1)} ={" "}
+                  {formatNumber(
+                    facility.powerConsumption * node.facilityCount,
+                    1,
+                  )}{" "}
+                  MW
+                </div>
+              )}
             </div>
           )}
         </>
@@ -112,6 +148,8 @@ export default function CustomProductionNode({
     "flex items-center justify-between bg-blue-100/70 dark:bg-blue-900/50 rounded-lg px-2 py-1 transition-colors";
   const circularWarningClasses =
     "text-red-600 dark:text-red-400 font-medium text-[10px] mt-2 text-center py-0.5 rounded bg-red-100/70 dark:bg-red-900/30";
+  const partialLoadClasses =
+    "text-yellow-600 dark:text-yellow-400 font-medium text-[10px] mt-1 text-center py-0.5 rounded bg-yellow-100/70 dark:bg-yellow-900/30";
 
   return (
     <Tooltip>
@@ -123,13 +161,21 @@ export default function CustomProductionNode({
           <Handle
             type="target"
             position={targetPosition as Position}
-            isConnectable={false} // Not connectable by user interaction
+            isConnectable={false}
           />
           <CardContent className="p-3 text-xs">
             {/* Item icon and name */}
             <div className="flex items-center gap-2 mb-2">
               <ItemIcon item={node.item} />
-              <span className="font-bold truncate flex-1">{itemName}</span>
+              <span className="font-bold truncate flex-1">
+                {itemName}
+                {/* Show facility index in separated mode */}
+                {isSeparated && data.facilityIndex !== undefined && (
+                  <span className="text-muted-foreground ml-1 text-[10px]">
+                    #{data.facilityIndex + 1}
+                  </span>
+                )}
+              </span>
             </div>
             {/* Production/Requirement rate */}
             <div className="flex items-center justify-between mb-2 bg-muted/50 rounded px-2 py-1">
@@ -151,15 +197,25 @@ export default function CustomProductionNode({
                       className="h-5 w-5 object-contain"
                     />
                   ) : (
-                    <span className="text-sm">🏭</span> // Fallback icon
+                    <span className="text-sm">🏭</span>
                   )}
                   <span className="text-[10px] text-muted-foreground truncate max-w-20">
                     {facilityName}
                   </span>
                 </div>
                 <span className="font-mono font-semibold text-blue-700 dark:text-blue-300">
-                  ×{formatNumber(node.facilityCount, 1)}
+                  {isSeparated
+                    ? // Separated mode: show facility index out of total
+                      `${data.facilityIndex! + 1}/${data.totalFacilities}`
+                    : // Merged mode: show facility count
+                      `×${formatNumber(node.facilityCount, 1)}`}
                 </span>
+              </div>
+            )}
+            {/* Partial load indicator (separated mode only) */}
+            {isSeparated && data.isPartialLoad && (
+              <div className={partialLoadClasses}>
+                ⚡ {t("tree.partialLoad")}
               </div>
             )}
             {/* Circular dependency warning */}
@@ -173,7 +229,7 @@ export default function CustomProductionNode({
           <Handle
             type="source"
             position={sourcePosition as Position}
-            isConnectable={false} // Not connectable by user interaction
+            isConnectable={false}
           />
         </Card>
       </TooltipTrigger>
