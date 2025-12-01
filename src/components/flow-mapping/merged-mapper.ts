@@ -9,77 +9,12 @@ import type {
   TargetSinkNodeData,
 } from "./types";
 import { applyEdgeStyling } from "./edge-styling";
-
-/**
- * Creates a stable key for a ProductionNode in merged mode.
- *
- * This key is used to identify and merge nodes that represent the same
- * item, recipe, and raw material status across the dependency tree.
- *
- * @param node The ProductionNode to create a key for
- * @returns A unique string key for the node
- */
-const createFlowNodeKey = (node: ProductionNode): string => {
-  const itemId = node.item.id;
-  const recipeId = node.recipe?.id ?? "raw";
-  const rawFlag = node.isRawMaterial ? "raw" : "prod";
-  return `${itemId}__${recipeId}__${rawFlag}`;
-};
-
-/**
- * Aggregates production data from multiple instances of the same production step.
- *
- * When the same item appears in multiple branches of the dependency tree
- * (e.g., as both an intermediate product and a final target), this function
- * combines their requirements into a single aggregated node.
- */
-type AggregatedNodeData = {
-  /** Representative ProductionNode (from first encounter) */
-  node: ProductionNode;
-  /** Total production rate across all branches */
-  totalRate: number;
-  /** Total facility count across all branches */
-  totalFacilityCount: number;
-};
-
-/**
- * Collects and aggregates all production nodes from the dependency tree.
- *
- * Traverses all root nodes and their dependencies, merging nodes with identical
- * keys (same item, recipe, and raw material status) by summing their rates.
- *
- * @param rootNodes Root nodes of the dependency tree
- * @returns Map of node keys to aggregated production data
- */
-function aggregateProductionNodes(
-  rootNodes: ProductionNode[],
-): Map<string, AggregatedNodeData> {
-  const aggregated = new Map<string, AggregatedNodeData>();
-
-  const traverse = (node: ProductionNode) => {
-    const key = createFlowNodeKey(node);
-    const existing = aggregated.get(key);
-
-    if (existing) {
-      // Aggregate rates and facility counts from multiple occurrences
-      existing.totalRate += node.targetRate;
-      existing.totalFacilityCount += node.facilityCount;
-    } else {
-      // First encounter: create new aggregated entry
-      aggregated.set(key, {
-        node,
-        totalRate: node.targetRate,
-        totalFacilityCount: node.facilityCount,
-      });
-    }
-
-    // Recursively process dependencies
-    node.dependencies.forEach(traverse);
-  };
-
-  rootNodes.forEach(traverse);
-  return aggregated;
-}
+import {
+  createFlowNodeKey,
+  aggregateProductionNodes,
+  createTargetMap,
+  makeNodeIdFromKey,
+} from "./flow-utils";
 
 /**
  * Maps a UnifiedProductionPlan to React Flow nodes and edges in merged mode.
@@ -109,23 +44,9 @@ export function mapPlanToFlowMerged(
   const nodeKeyToId = new Map<string, string>();
   const targetSinkNodes: Node<TargetSinkNodeData>[] = [];
   // Create a map of target items for quick lookup
-  const targetMap = new Map<ItemId, number>();
-  if (originalTargets) {
-    originalTargets.forEach((target) => {
-      targetMap.set(target.itemId, target.rate);
-    });
-  }
+  const targetMap = createTargetMap(originalTargets);
 
   const aggregatedNodes = aggregateProductionNodes(rootNodes);
-
-  /**
-   * Generates a stable and readable node ID from a given key.
-   * A prefix is added to avoid collisions with other ID formats.
-   *
-   * @param key The unique key generated for a ProductionNode
-   * @returns A formatted node ID
-   */
-  const makeNodeIdFromKey = (key: string) => `node-${key}`;
 
   /**
    * Retrieves an existing node ID or creates a new one if the node hasn't been encountered.

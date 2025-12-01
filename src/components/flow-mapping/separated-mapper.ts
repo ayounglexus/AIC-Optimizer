@@ -10,73 +10,13 @@ import type {
 } from "./types";
 import { CapacityPoolManager } from "./capacity-pool";
 import { applyEdgeStyling } from "./edge-styling";
-
-/**
- * Creates a stable key for a ProductionNode.
- *
- * This key identifies unique production steps across the dependency tree,
- * allowing proper merging of duplicate nodes before splitting into facilities.
- *
- * @param node The ProductionNode to create a key for
- * @returns A unique string key for the node
- */
-const createFlowNodeKey = (node: ProductionNode): string => {
-  const itemId = node.item.id;
-  const recipeId = node.recipe?.id ?? "raw";
-  const rawFlag = node.isRawMaterial ? "raw" : "prod";
-  return `${itemId}__${recipeId}__${rawFlag}`;
-};
-
-/**
- * Aggregated production node data for separated mode.
- * Combines multiple occurrences of the same production step.
- */
-type AggregatedProductionData = {
-  /** Representative ProductionNode (from first encounter) */
-  node: ProductionNode;
-  /** Total production rate across all branches */
-  totalRate: number;
-  /** Total facility count across all branches */
-  totalFacilityCount: number;
-};
-
-/**
- * Collects all unique production nodes from the dependency tree and aggregates their requirements.
- *
- * Traverses the tree and deduplicates nodes based on their key,
- * while summing up rates for nodes that appear in multiple branches.
- *
- * @param rootNodes Root nodes of the dependency tree
- * @returns Map of node keys to their aggregated production data
- */
-function collectUniqueNodes(
-  rootNodes: ProductionNode[],
-): Map<string, AggregatedProductionData> {
-  const nodeMap = new Map<string, AggregatedProductionData>();
-
-  const collect = (node: ProductionNode) => {
-    const key = createFlowNodeKey(node);
-    const existing = nodeMap.get(key);
-
-    if (existing) {
-      // Aggregate rates from multiple occurrences
-      existing.totalRate += node.targetRate;
-      existing.totalFacilityCount += node.facilityCount;
-    } else {
-      // First encounter: create new entry
-      nodeMap.set(key, {
-        node,
-        totalRate: node.targetRate,
-        totalFacilityCount: node.facilityCount,
-      });
-    }
-
-    node.dependencies.forEach(collect);
-  };
-
-  rootNodes.forEach(collect);
-  return nodeMap;
-}
+import {
+  createFlowNodeKey,
+  aggregateProductionNodes,
+  createTargetMap,
+  makeNodeIdFromKey,
+  type AggregatedProductionNodeData,
+} from "./flow-utils";
 
 /**
  * Performs topological sort on production nodes to determine processing order.
@@ -88,7 +28,7 @@ function collectUniqueNodes(
  * @returns Array of node keys in topological order (leaves to roots)
  */
 function topologicalSort(
-  nodeMap: Map<string, AggregatedProductionData>,
+  nodeMap: Map<string, AggregatedProductionNodeData>,
 ): string[] {
   const inDegree = new Map<string, number>();
   const adjList = new Map<string, Set<string>>();
@@ -164,17 +104,11 @@ export function mapPlanToFlowSeparated(
   originalTargets?: Array<{ itemId: ItemId; rate: number }>,
 ): { nodes: (FlowProductionNode | FlowTargetNode)[]; edges: Edge[] } {
   // Step 1: Collect unique nodes with aggregated rates and determine processing order
-  const nodeMap = collectUniqueNodes(rootNodes);
+  const nodeMap = aggregateProductionNodes(rootNodes);
   const sortedKeys = topologicalSort(nodeMap);
 
   // Create a map of target items for quick lookup
-  const targetMap = new Map<ItemId, number>();
-  if (originalTargets) {
-    originalTargets.forEach((target) => {
-      targetMap.set(target.itemId, target.rate);
-    });
-  }
-
+  const targetMap = createTargetMap(originalTargets);
   // Step 2: Initialize capacity pool manager with aggregated production rates
   const poolManager = new CapacityPoolManager();
 
@@ -217,7 +151,7 @@ export function mapPlanToFlowSeparated(
       };
 
       flowNodes.push({
-        id: `node-${key}`,
+        id: makeNodeIdFromKey(key),
         type: "productionNode",
         data: {
           productionNode: aggregatedNode,
@@ -322,7 +256,7 @@ export function mapPlanToFlowSeparated(
         // Allocate capacity from producer pool
         if (dependency.isRawMaterial) {
           // Connect directly to the raw material node
-          const rawMaterialNodeId = `node-${depKey}`;
+          const rawMaterialNodeId = makeNodeIdFromKey(depKey);
           edges.push({
             id: `e${edgeIdCounter++}`,
             source: rawMaterialNodeId,
