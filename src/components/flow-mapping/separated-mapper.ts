@@ -23,24 +23,49 @@ const createFlowNodeKey = (node: ProductionNode): string => {
 };
 
 /**
- * Collects all unique production nodes from the dependency tree.
+ * Aggregated production node data for separated mode.
+ * Combines multiple occurrences of the same production step.
+ */
+type AggregatedProductionData = {
+  /** Representative ProductionNode (from first encounter) */
+  node: ProductionNode;
+  /** Total production rate across all branches */
+  totalRate: number;
+  /** Total facility count across all branches */
+  totalFacilityCount: number;
+};
+
+/**
+ * Collects all unique production nodes from the dependency tree and aggregates their requirements.
  *
  * Traverses the tree and deduplicates nodes based on their key,
- * keeping only the first encountered instance of each unique production step.
+ * while summing up rates for nodes that appear in multiple branches.
  *
  * @param rootNodes Root nodes of the dependency tree
- * @returns Map of node keys to their representative ProductionNode
+ * @returns Map of node keys to their aggregated production data
  */
 function collectUniqueNodes(
   rootNodes: ProductionNode[],
-): Map<string, ProductionNode> {
-  const nodeMap = new Map<string, ProductionNode>();
+): Map<string, AggregatedProductionData> {
+  const nodeMap = new Map<string, AggregatedProductionData>();
 
   const collect = (node: ProductionNode) => {
     const key = createFlowNodeKey(node);
-    if (!nodeMap.has(key)) {
-      nodeMap.set(key, node);
+    const existing = nodeMap.get(key);
+
+    if (existing) {
+      // Aggregate rates from multiple occurrences
+      existing.totalRate += node.targetRate;
+      existing.totalFacilityCount += node.facilityCount;
+    } else {
+      // First encounter: create new entry
+      nodeMap.set(key, {
+        node,
+        totalRate: node.targetRate,
+        totalFacilityCount: node.facilityCount,
+      });
     }
+
     node.dependencies.forEach(collect);
   };
 
@@ -54,10 +79,12 @@ function collectUniqueNodes(
  * Returns nodes in dependency order (producers before consumers), ensuring that
  * when we allocate capacity, all upstream producers are already initialized.
  *
- * @param nodeMap Map of unique production nodes
+ * @param nodeMap Map of aggregated production data
  * @returns Array of node keys in topological order (leaves to roots)
  */
-function topologicalSort(nodeMap: Map<string, ProductionNode>): string[] {
+function topologicalSort(
+  nodeMap: Map<string, AggregatedProductionData>,
+): string[] {
   const inDegree = new Map<string, number>();
   const adjList = new Map<string, Set<string>>();
 
@@ -68,8 +95,8 @@ function topologicalSort(nodeMap: Map<string, ProductionNode>): string[] {
   });
 
   // Build adjacency list and calculate in-degrees
-  nodeMap.forEach((node, key) => {
-    node.dependencies.forEach((dep) => {
+  nodeMap.forEach((data, key) => {
+    data.node.dependencies.forEach((dep) => {
       const depKey = createFlowNodeKey(dep);
       if (nodeMap.has(depKey)) {
         adjList.get(depKey)!.add(key);
@@ -128,30 +155,46 @@ export function mapPlanToFlowSeparated(
   items: Item[],
   facilities: Facility[],
 ): { nodes: FlowProductionNode[]; edges: Edge[] } {
-  // Step 1: Collect unique nodes and determine processing order
+  // Step 1: Collect unique nodes with aggregated rates and determine processing order
   const nodeMap = collectUniqueNodes(rootNodes);
   const sortedKeys = topologicalSort(nodeMap);
 
-  // Step 2: Initialize capacity pool manager
+  // Step 2: Initialize capacity pool manager with aggregated production rates
   const poolManager = new CapacityPoolManager();
 
   sortedKeys.forEach((key) => {
-    const node = nodeMap.get(key)!;
-    poolManager.createPool(node, key);
+    const aggregatedData = nodeMap.get(key)!;
+
+    const aggregatedNode: ProductionNode = {
+      ...aggregatedData.node,
+      targetRate: aggregatedData.totalRate,
+      facilityCount: aggregatedData.totalFacilityCount,
+    };
+
+    poolManager.createPool(aggregatedNode, key);
   });
 
   // Step 3: Generate Flow nodes from facility instances
   const flowNodes: Node<FlowNodeDataSeparated>[] = [];
 
-  nodeMap.forEach((node, key) => {
+  nodeMap.forEach((aggregatedData, key) => {
+    const node = aggregatedData.node;
+
     if (node.isRawMaterial) {
       // Raw materials are shown as single nodes (no facility splitting)
+      // Use aggregated rate for display
       const isCircular = node.recipe !== null;
+      const aggregatedNode: ProductionNode = {
+        ...node,
+        targetRate: aggregatedData.totalRate,
+        facilityCount: aggregatedData.totalFacilityCount,
+      };
+
       flowNodes.push({
         id: `node-${key}`,
         type: "productionNode",
         data: {
-          productionNode: node,
+          productionNode: aggregatedNode,
           isCircular,
           items,
           facilities,
@@ -206,16 +249,15 @@ export function mapPlanToFlowSeparated(
   const reverseOrder = [...sortedKeys].reverse();
 
   reverseOrder.forEach((consumerKey) => {
-    const consumerNode = nodeMap.get(consumerKey)!;
+    const consumerData = nodeMap.get(consumerKey)!;
+    const consumerNode = consumerData.node;
 
     // Skip raw materials (they don't consume anything)
     if (consumerNode.isRawMaterial) {
       return;
     }
 
-    const consumerFacilities = consumerNode.isRawMaterial
-      ? []
-      : poolManager.getFacilityInstances(consumerKey);
+    const consumerFacilities = poolManager.getFacilityInstances(consumerKey);
 
     // For each consumer facility, allocate inputs from producer facilities
     consumerFacilities.forEach((consumerFacility) => {
