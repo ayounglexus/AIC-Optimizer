@@ -15,6 +15,7 @@ import {
   aggregateProductionNodes,
   makeNodeIdFromKey,
   type AggregatedProductionNodeData,
+  findTargetsWithDownstream,
 } from "./flow-utils";
 
 /**
@@ -101,17 +102,27 @@ export function mapPlanToFlowSeparated(
   items: Item[],
   facilities: Facility[],
 ): { nodes: (FlowProductionNode | FlowTargetNode)[]; edges: Edge[] } {
-  // Step 1: Collect unique nodes with aggregated rates and determine processing order
+  // Step 1: Collect unique nodes and determine processing order
   const nodeMap = aggregateProductionNodes(rootNodes);
   const sortedKeys = topologicalSort(nodeMap);
 
-  // Step 2: Initialize capacity pool manager with aggregated production rates
+  // Identify which targets are upstream of other targets
+  const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
+
+  // Step 2: Initialize capacity pool manager
   const poolManager = new CapacityPoolManager();
 
   sortedKeys.forEach((key) => {
     const aggregatedData = nodeMap.get(key)!;
 
-    // Create a ProductionNode with aggregated totals for capacity calculation
+    // Skip creating pool for targets without downstream
+    const isTargetWithoutDownstream =
+      aggregatedData.node.isTarget && !targetsWithDownstream.has(key);
+
+    if (isTargetWithoutDownstream) {
+      return;
+    }
+
     const aggregatedNode: ProductionNode = {
       ...aggregatedData.node,
       targetRate: aggregatedData.totalRate,
@@ -121,7 +132,7 @@ export function mapPlanToFlowSeparated(
     poolManager.createPool(aggregatedNode, key);
   });
 
-  // Step 3: Generate Flow nodes from facility instances
+  // Step 3: Generate Flow nodes (skip terminal targets)
   const flowNodes: Node<
     FlowNodeDataSeparated | FlowNodeDataSeparatedWithTarget
   >[] = [];
@@ -130,15 +141,21 @@ export function mapPlanToFlowSeparated(
   nodeMap.forEach((aggregatedData, key) => {
     const node = aggregatedData.node;
 
-    // Check if this node is also a direct target
-    const isDirectTarget = node.isTarget;
+    // Skip creating production nodes for targets without downstream
+    const isTargetWithoutDownstream =
+      node.isTarget && !targetsWithDownstream.has(key);
+
+    if (isTargetWithoutDownstream) {
+      return;
+    }
+
+    // Check if this node is a target with downstream
+    const isDirectTarget = node.isTarget && targetsWithDownstream.has(key);
     const directTargetRate = isDirectTarget
       ? aggregatedData.totalRate
       : undefined;
 
     if (node.isRawMaterial) {
-      // Raw materials are shown as single nodes (no facility splitting)
-      // Use aggregated rate for display
       const isCircular = node.recipe !== null;
       const aggregatedNode: ProductionNode = {
         ...node,
@@ -162,7 +179,6 @@ export function mapPlanToFlowSeparated(
         targetPosition: Position.Left,
       });
     } else {
-      // Production nodes are split into individual facilities
       const facilityInstances = poolManager.getFacilityInstances(key);
       const totalFacilities = facilityInstances.length;
 
@@ -201,7 +217,7 @@ export function mapPlanToFlowSeparated(
     }
   });
 
-  // Step 4: Generate edges by allocating capacity
+  // Step 4: Generate edges (skip terminal targets in consumption)
   const edges: Edge[] = [];
   let edgeIdCounter = 0;
 
@@ -213,23 +229,23 @@ export function mapPlanToFlowSeparated(
     const consumerData = nodeMap.get(consumerKey)!;
     const consumerNode = consumerData.node;
 
-    // Skip raw materials (they don't consume anything)
-    if (consumerNode.isRawMaterial) {
+    // Skip targets without downstream and raw materials
+    const isTargetWithoutDownstream =
+      consumerNode.isTarget && !targetsWithDownstream.has(consumerKey);
+
+    if (isTargetWithoutDownstream || consumerNode.isRawMaterial) {
       return;
     }
 
     const consumerFacilities = poolManager.getFacilityInstances(consumerKey);
 
-    // For each consumer facility, allocate inputs from producer facilities
     consumerFacilities.forEach((consumerFacility) => {
       const consumerId = consumerFacility.facilityId;
       const consumerOutputRate = consumerFacility.actualOutputRate;
 
-      // Process each dependency (input material)
       consumerNode.dependencies.forEach((dependency) => {
         const depKey = createFlowNodeKey(dependency);
 
-        // Calculate demand rate for this specific consumer facility
         const recipe = consumerNode.recipe!;
         const inputItem = recipe.inputs.find(
           (inp) => inp.itemId === dependency.item.id,
@@ -286,14 +302,23 @@ export function mapPlanToFlowSeparated(
     });
   });
 
-  // Step 5: Create target sink nodes for each original target
+  // Step 5: Create target sink nodes
   const targetNodes = Array.from(nodeMap.entries()).filter(
     ([, data]) => data.node.isTarget && !data.node.isRawMaterial,
   );
 
   targetNodes.forEach(([productionKey, data]) => {
     const targetNodeId = `target-sink-${data.node.item.id}`;
-    const allocations = poolManager.allocate(productionKey, data.totalRate);
+    const hasDownstream = targetsWithDownstream.has(productionKey);
+
+    // Prepare production info for terminal targets
+    const productionInfo = !hasDownstream
+      ? {
+          facility: data.node.facility,
+          facilityCount: data.totalFacilityCount,
+          recipe: data.node.recipe,
+        }
+      : undefined;
 
     targetSinkNodes.push({
       id: targetNodeId,
@@ -302,29 +327,95 @@ export function mapPlanToFlowSeparated(
         item: data.node.item,
         targetRate: data.totalRate,
         items,
+        facilities,
+        productionInfo, // Pass production info for terminal targets
       },
       position: { x: 0, y: 0 },
       targetPosition: Position.Left,
     });
 
-    allocations.forEach((allocation) => {
-      edges.push({
-        id: `e${edgeIdCounter++}`,
-        source: allocation.sourceNodeId,
-        target: targetNodeId,
-        type: "default",
-        label: `${allocation.allocatedAmount.toFixed(2)} /min`,
-        data: { flowRate: allocation.allocatedAmount },
-        animated: true,
-        style: { stroke: "#10b981", strokeWidth: 2 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "#10b981",
-        },
+    if (hasDownstream) {
+      // Target with downstream: allocate from its production pool
+      const allocations = poolManager.allocate(productionKey, data.totalRate);
+
+      allocations.forEach((allocation) => {
+        edges.push({
+          id: `e${edgeIdCounter++}`,
+          source: allocation.sourceNodeId,
+          target: targetNodeId,
+          type: "default",
+          label: `${allocation.allocatedAmount.toFixed(2)} /min`,
+          data: { flowRate: allocation.allocatedAmount },
+          animated: true,
+          style: { stroke: "#10b981", strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#10b981",
+          },
+        });
       });
-    });
+    } else {
+      // Target without downstream: allocate directly from its dependencies
+      const targetNode = data.node;
+
+      targetNode.dependencies.forEach((dep) => {
+        const depKey = createFlowNodeKey(dep);
+
+        const recipe = targetNode.recipe;
+        if (!recipe) return;
+
+        const inputItem = recipe.inputs.find(
+          (inp) => inp.itemId === dep.item.id,
+        );
+        const outputItem = recipe.outputs.find(
+          (out) => out.itemId === targetNode.item.id,
+        );
+
+        if (!inputItem || !outputItem) return;
+
+        const inputOutputRatio = inputItem.amount / outputItem.amount;
+        const demandRate = inputOutputRatio * data.totalRate;
+
+        if (dep.isRawMaterial) {
+          const rawMaterialNodeId = makeNodeIdFromKey(depKey);
+          edges.push({
+            id: `e${edgeIdCounter++}`,
+            source: rawMaterialNodeId,
+            target: targetNodeId,
+            type: "default",
+            label: `${demandRate.toFixed(2)} /min`,
+            data: { flowRate: demandRate },
+            animated: true,
+            style: { stroke: "#10b981", strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: "#10b981",
+            },
+          });
+        } else {
+          const allocations = poolManager.allocate(depKey, demandRate);
+
+          allocations.forEach((allocation) => {
+            edges.push({
+              id: `e${edgeIdCounter++}`,
+              source: allocation.sourceNodeId,
+              target: targetNodeId,
+              type: "default",
+              label: `${allocation.allocatedAmount.toFixed(2)} /min`,
+              data: { flowRate: allocation.allocatedAmount },
+              animated: true,
+              style: { stroke: "#10b981", strokeWidth: 2 },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: "#10b981",
+              },
+            });
+          });
+        }
+      });
+    }
   });
-  // Apply dynamic styling to edges
+
   const styledEdges = applyEdgeStyling(edges);
 
   return {

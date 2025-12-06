@@ -1,5 +1,5 @@
 import type { Node } from "@xyflow/react";
-import type { Item, Facility } from "@/types";
+import type { Item, Facility, Recipe } from "@/types";
 import type { ProductionNode } from "@/lib/calculator";
 
 /**
@@ -101,6 +101,19 @@ export interface FlowNodeDataSeparatedWithTarget extends FlowNodeDataSeparated {
 }
 
 /**
+ * Production information for terminal targets (targets without downstream consumers).
+ * Contains facility and recipe details that would normally be shown in a production node.
+ */
+export interface TerminalTargetProductionInfo {
+  /** The facility used to produce this target item */
+  facility: Facility | null;
+  /** Number of facilities required to meet the target rate */
+  facilityCount: number;
+  /** The recipe used to produce this target item */
+  recipe: Recipe | null;
+}
+
+/**
  * Represents data for a virtual sink node that collects production output for user-defined targets.
  * These nodes help visualize which items are final production goals vs intermediate products.
  */
@@ -111,6 +124,8 @@ export interface TargetSinkNodeData {
   targetRate: number;
   /** All available items (for icon rendering) */
   items: Item[];
+  facilities: Facility[];
+  productionInfo?: TerminalTargetProductionInfo;
   [key: string]: unknown;
 }
 

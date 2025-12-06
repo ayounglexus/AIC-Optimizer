@@ -102,3 +102,72 @@ export function createTargetMap(
  * @returns A formatted node ID
  */
 export const makeNodeIdFromKey = (key: string) => `node-${key}`;
+
+/**
+ * Identifies target nodes that serve as upstream dependencies for other targets.
+ * These targets need both a production node (marked as target) and a separate target sink.
+ *
+ * @param rootNodes Root nodes of the dependency tree
+ * @returns Set of node keys for targets that are upstream of other targets
+ */
+export function findTargetsWithDownstream(
+  rootNodes: ProductionNode[],
+): Set<string> {
+  const targetsWithDownstream = new Set<string>();
+
+  // Collect all target nodes with cycle protection
+  const allTargetNodes: ProductionNode[] = [];
+  const collectTargets = (node: ProductionNode, visited: Set<string>) => {
+    const key = createFlowNodeKey(node);
+
+    // Prevent infinite loops in circular dependencies
+    if (visited.has(key)) {
+      return;
+    }
+    visited.add(key);
+
+    if (node.isTarget) {
+      allTargetNodes.push(node);
+    }
+
+    node.dependencies.forEach((dep) => collectTargets(dep, visited));
+  };
+
+  rootNodes.forEach((root) => collectTargets(root, new Set()));
+
+  // For each target, check if any other target depends on it
+  allTargetNodes.forEach((targetNode) => {
+    const targetKey = createFlowNodeKey(targetNode);
+
+    // Check all other targets' dependency trees
+    allTargetNodes.forEach((otherTarget) => {
+      if (otherTarget === targetNode) return;
+
+      // Traverse this target's dependencies to see if it includes targetNode
+      // Use visited set to prevent infinite loops
+      const hasDependency = (
+        node: ProductionNode,
+        visited: Set<string>,
+      ): boolean => {
+        const nodeKey = createFlowNodeKey(node);
+
+        // Prevent infinite loops
+        if (visited.has(nodeKey)) {
+          return false;
+        }
+        visited.add(nodeKey);
+
+        if (nodeKey === targetKey) return true;
+        return node.dependencies.some((dep) => hasDependency(dep, visited));
+      };
+
+      if (
+        otherTarget.dependencies.some((dep) => hasDependency(dep, new Set()))
+      ) {
+        targetsWithDownstream.add(targetKey);
+      }
+    });
+  });
+
+  return targetsWithDownstream;
+}

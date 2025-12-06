@@ -11,7 +11,7 @@
       "icon": "Icon",
       "item": "Item",
       "outputRate": "Rate/min",
-      "power": "Power(kW)",
+      "power": "Power (kW)",
       "recipe": "Recipe"
     },
     "noData": "No Data",
@@ -19,16 +19,22 @@
     "rawMaterial": "Raw Material"
   },
   "tree": {
-    "circularRawMaterial": "Circular dependency raw material",
+    "alsoTarget": "Also a Target",
+    "circularRawMaterial": "Circular Dependency Raw Material",
     "circularWarning": "Circular Production Warning",
     "facility": "Facility",
+    "facilityCount": "Facility Count",
     "facilityIndex": "Facility Index",
     "item": "Item",
     "noTarget": "No target output defined yet. Please set a target to view the dependency tree.",
     "partialLoad": "Partial Load",
     "power": "Power",
     "produced": "Produced",
+    "productionTarget": "Production Target",
     "required": "Required",
+    "target": "Target",
+    "targetDescription": "Target production of {{item}} at {{rate}} per minute.",
+    "targetRate": "Target Rate",
     "trueRawMaterial": "True Raw Material"
   }
 }

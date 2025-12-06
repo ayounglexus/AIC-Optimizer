@@ -13,6 +13,7 @@ import {
   createFlowNodeKey,
   aggregateProductionNodes,
   makeNodeIdFromKey,
+  findTargetsWithDownstream,
 } from "./flow-utils";
 
 /**
@@ -44,15 +45,9 @@ export function mapPlanToFlowMerged(
 
   const aggregatedNodes = aggregateProductionNodes(rootNodes);
 
-  /**
-   * Retrieves an existing node ID or creates a new one if the node hasn't been encountered.
-   *
-   * This ensures that nodes representing the same production entity share the same ID
-   * and are properly merged in the visualization.
-   *
-   * @param node The ProductionNode for which to get or create an ID
-   * @returns The unique ID for the node
-   */
+  // Identify which targets are upstream of other targets
+  const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
+
   const getOrCreateNodeId = (node: ProductionNode): string => {
     const key = createFlowNodeKey(node);
     if (nodeKeyToId.has(key)) {
@@ -82,13 +77,29 @@ export function mapPlanToFlowMerged(
     const nodeId = getOrCreateNodeId(node);
     const key = createFlowNodeKey(node);
 
+    // Skip creating production node if it's a target without downstream
+    const isTargetWithoutDownstream =
+      node.isTarget && !targetsWithDownstream.has(key);
+
+    if (isTargetWithoutDownstream) {
+      // Don't create a production node for pure targets
+      // They will only exist as target sink nodes
+
+      // Still need to process dependencies
+      node.dependencies.forEach((dep) => {
+        traverse(dep, null, edgeIdCounter);
+      });
+
+      return nodeId;
+    }
+
     // Add node if it doesn't exist yet (using aggregated data)
     if (!nodes.find((n) => n.id === nodeId)) {
       const aggregatedData = aggregatedNodes.get(key)!;
       const isCircular = node.isRawMaterial && node.recipe !== null;
 
-      // Check if this node is also a direct target
-      const isDirectTarget = aggregatedData.node.isTarget;
+      // Check if this node is a target with downstream (needs marking)
+      const isDirectTarget = node.isTarget && targetsWithDownstream.has(key);
       const directTargetRate = isDirectTarget
         ? aggregatedData.totalRate
         : undefined;
@@ -118,7 +129,6 @@ export function mapPlanToFlowMerged(
     }
 
     // Create an edge from this node to its parent (if parent exists)
-    // Edge labels show the flow rate for THIS specific dependency, not total node capacity
     if (parentId) {
       const flowRate = node.targetRate;
 
@@ -155,13 +165,23 @@ export function mapPlanToFlowMerged(
   const edgeIdCounter = { count: 0 };
   rootNodes.forEach((root) => traverse(root, null, edgeIdCounter));
 
+  // Create target sink nodes for all targets
   const targetNodes = Array.from(aggregatedNodes.entries()).filter(
     ([, data]) => data.node.isTarget && !data.node.isRawMaterial,
   );
 
   targetNodes.forEach(([key, data]) => {
     const targetNodeId = `target-sink-${data.node.item.id}`;
-    const productionNodeId = makeNodeIdFromKey(key);
+    const hasDownstream = targetsWithDownstream.has(key);
+
+    // Prepare production info for terminal targets (targets without downstream)
+    const productionInfo = !hasDownstream
+      ? {
+          facility: data.node.facility,
+          facilityCount: data.totalFacilityCount,
+          recipe: data.node.recipe,
+        }
+      : undefined;
 
     targetSinkNodes.push({
       id: targetNodeId,
@@ -170,25 +190,68 @@ export function mapPlanToFlowMerged(
         item: data.node.item,
         targetRate: data.totalRate,
         items,
+        facilities,
+        productionInfo, // Pass production info for terminal targets
       },
       position: { x: 0, y: 0 },
       targetPosition: Position.Left,
     });
 
-    edges.push({
-      id: `e${edgeIdCounter.count++}`,
-      source: productionNodeId,
-      target: targetNodeId,
-      type: "default",
-      label: `${data.totalRate.toFixed(2)} /min`,
-      data: { flowRate: data.totalRate },
-      animated: true,
-      style: { stroke: "#10b981", strokeWidth: 2 },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: "#10b981",
-      },
-    });
+    if (hasDownstream) {
+      // Target with downstream: connect from production node to target sink
+      const productionNodeId = makeNodeIdFromKey(key);
+      edges.push({
+        id: `e${edgeIdCounter.count++}`,
+        source: productionNodeId,
+        target: targetNodeId,
+        type: "default",
+        label: `${data.totalRate.toFixed(2)} /min`,
+        data: { flowRate: data.totalRate },
+        animated: true,
+        style: { stroke: "#10b981", strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#10b981",
+        },
+      });
+    } else {
+      // Target without downstream: connect directly from its dependencies
+      const targetNode = data.node;
+      targetNode.dependencies.forEach((dep) => {
+        const depKey = createFlowNodeKey(dep);
+        const depNodeId = makeNodeIdFromKey(depKey);
+
+        const recipe = targetNode.recipe;
+        if (!recipe) return;
+
+        const inputItem = recipe.inputs.find(
+          (inp) => inp.itemId === dep.item.id,
+        );
+        const outputItem = recipe.outputs.find(
+          (out) => out.itemId === targetNode.item.id,
+        );
+
+        if (!inputItem || !outputItem) return;
+
+        const inputOutputRatio = inputItem.amount / outputItem.amount;
+        const flowRate = inputOutputRatio * data.totalRate;
+
+        edges.push({
+          id: `e${edgeIdCounter.count++}`,
+          source: depNodeId,
+          target: targetNodeId,
+          type: "default",
+          label: `${flowRate.toFixed(2)} /min`,
+          data: { flowRate },
+          animated: true,
+          style: { stroke: "#10b981", strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#10b981",
+          },
+        });
+      });
+    }
   });
 
   const styledEdges = applyEdgeStyling(edges);
