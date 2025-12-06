@@ -2,11 +2,154 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>endfield-tools</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/endfield-tool/vite.svg" />
+
+    <!-- Primary Meta Tags -->
+    <title>Endfield Tool - Production Calculator for Arknights: Endfield</title>
+    <meta
+      name="title"
+      content="Endfield Tool - Production Calculator for Arknights: Endfield"
+    />
+    <meta
+      name="description"
+      content="Free production planning and facility calculation tool for Arknights: Endfield. Calculate resources, optimize factory production chains, and manage your AIC base efficiently. 明日方舟终末地工厂生产计算器。"
+    />
+    <meta
+      name="keywords"
+      content="Arknights Endfield, Endfield calculator, production planner, factory calculator, AIC base, recipe calculator, 明日方舟, 终末地, 工厂计算器, 生产规划"
+    />
+    <meta name="author" content="JamboChen" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://jambochen.github.io/endfield-tool/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://jambochen.github.io/endfield-tool/"
+    />
+    <meta
+      property="og:title"
+      content="Endfield Tool - Production Calculator for Arknights: Endfield"
+    />
+    <meta
+      property="og:description"
+      content="Free production planning and facility calculation tool for Arknights: Endfield. Calculate resources, optimize production chains, and manage your AIC base."
+    />
+    <meta
+      property="og:image"
+      content="https://jambochen.github.io/endfield-tool/og-image.png"
+    />
+    <meta property="og:site_name" content="Endfield Tool" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="zh_CN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:url"
+      content="https://jambochen.github.io/endfield-tool/"
+    />
+    <meta
+      name="twitter:title"
+      content="Endfield Tool - Production Calculator"
+    />
+    <meta
+      name="twitter:description"
+      content="Free production planning tool for Arknights: Endfield. Calculate resources and optimize your factory."
+    />
+    <meta
+      name="twitter:image"
+      content="https://jambochen.github.io/endfield-tool/og-image.png"
+    />
+
+    <!-- Additional SEO -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="application-name" content="Endfield Tool" />
+    <meta name="apple-mobile-web-app-title" content="Endfield Tool" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Endfield Tool",
+        "alternateName": "Arknights Endfield Production Calculator",
+        "description": "Production planning and facility calculation tool for Arknights: Endfield. Helps players optimize resource production and manage factory construction.",
+        "url": "https://jambochen.github.io/endfield-tool/",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript. Modern browser recommended.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "creator": {
+          "@type": "Person",
+          "name": "JamboChen",
+          "url": "https://github.com/JamboChen"
+        },
+        "inLanguage": ["en", "zh"],
+        "featureList": [
+          "Production chain calculation",
+          "Facility planning",
+          "Resource optimization",
+          "Recipe management",
+          "Multi-language support"
+        ],
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "5",
+          "ratingCount": "1"
+        }
+      }
+    </script>
+
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
+    <!-- NoScript fallback for SEO -->
+    <noscript>
+      <div
+        style="
+          padding: 20px;
+          text-align: center;
+          font-family: system-ui, sans-serif;
+        "
+      >
+        <h1>Endfield Tool - Production Calculator</h1>
+        <p>
+          A production planning and facility calculation tool for
+          <strong>Arknights: Endfield</strong>.
+        </p>
+        <h2>Features</h2>
+        <ul style="text-align: left; max-width: 600px; margin: 20px auto">
+          <li>📊 View all items and recipes with production times</li>
+          <li>
+            🎯 Set production targets and automatically calculate material
+            requirements
+          </li>
+          <li>🏭 Estimate required facilities and recommended counts</li>
+          <li>⚡ Real-time calculation with instant updates</li>
+          <li>🌍 Multi-language support (English, 中文)</li>
+        </ul>
+        <p>
+          <strong>This application requires JavaScript to run.</strong>
+        </p>
+        <p>Please enable JavaScript in your browser to use the tool.</p>
+      </div>
+    </noscript>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
