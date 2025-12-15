@@ -4,6 +4,11 @@
     "feedback": "피드백 및 제안:",
     "unofficial": "비공식 팬 제작 도구"
   },
+  "header": {
+    "community": "커뮤니티",
+    "discord": "Discord 서버",
+    "qqGroup": "QQ 그룹"
+  },
   "tabs": {
     "merged": "통합",
     "separated": "분리",

@@ -4,6 +4,11 @@
     "feedback": "Comentarios y sugerencias:",
     "unofficial": "Herramienta no oficial creada por fans"
   },
+  "header": {
+    "community": "Comunidad",
+    "discord": "Servidor de Discord",
+    "qqGroup": "Grupo de QQ"
+  },
   "tabs": {
     "merged": "Combinado",
     "separated": "Separado",

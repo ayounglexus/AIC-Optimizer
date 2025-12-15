@@ -4,6 +4,11 @@
     "feedback": "フィードバック・ご提案:",
     "unofficial": "非公式ファンメイドツール"
   },
+  "header": {
+    "community": "コミュニティ",
+    "discord": "Discord サーバー",
+    "qqGroup": "QQ グループ"
+  },
   "tabs": {
     "merged": "統合",
     "separated": "分離",

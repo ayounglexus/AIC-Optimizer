@@ -4,6 +4,11 @@
     "feedback": "Отзывы и предложения:",
     "unofficial": "Неофициальный фанатский инструмент"
   },
+  "header": {
+    "community": "Сообщество",
+    "discord": "Сервер Discord",
+    "qqGroup": "Группа QQ"
+  },
   "tabs": {
     "merged": "Объединённый",
     "separated": "Раздельный",

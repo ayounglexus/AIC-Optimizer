@@ -4,6 +4,11 @@
     "feedback": "反馈与建议：",
     "unofficial": "非官方粉丝工具"
   },
+  "header": {
+    "community": "社区",
+    "discord": "Discord 服务器",
+    "qqGroup": "QQ 群"
+  },
   "tabs": {
     "merged": "合并",
     "separated": "分离",

@@ -7,10 +7,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SiGithub } from "react-icons/si";
+import { SiGithub, SiDiscord, SiTencentqq } from "react-icons/si";
 
 interface AppHeaderProps {
   onLanguageChange: (lang: string) => void;
@@ -26,6 +32,55 @@ export default function AppHeader({ onLanguageChange }: AppHeaderProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
         <div className="flex items-center gap-4">
+          {/* Community dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>{t("header.community")}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <a
+                  href="https://discord.gg/6V7CupPwb6"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <SiDiscord className="h-4 w-4" />
+                  <span>{t("header.discord")}</span>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a
+                  href="https://qm.qq.com/q/OFNdDzjk4Y"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <SiTencentqq className="h-4 w-4" />
+                  <span>{t("header.qqGroup")}</span>
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* GitHub link */}
+          <a
+            href="https://github.com/JamboChen/endfield-tool"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <SiGithub className="h-4 w-4" />
+            <span>GitHub</span>
+          </a>
+
           {/* Language selector */}
           <Select value={i18n.language} onValueChange={onLanguageChange}>
             <SelectTrigger className="w-[120px] h-9">
@@ -41,15 +96,6 @@ export default function AppHeader({ onLanguageChange }: AppHeaderProps) {
               <SelectItem value="ru">Русский</SelectItem>
             </SelectContent>
           </Select>
-          <a
-            href="https://github.com/JamboChen/endfield-tool"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <SiGithub className="h-4 w-4" />
-            <span>GitHub</span>
-          </a>
         </div>
       </div>
 
