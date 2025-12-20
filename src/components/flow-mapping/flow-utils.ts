@@ -113,63 +113,47 @@ export const makeNodeIdFromKey = (key: string) => `node-${key}`;
 export function findTargetsWithDownstream(
   rootNodes: ProductionNode[],
 ): Set<string> {
-  const targetsWithDownstream = new Set<string>();
+  const allTargets = new Set<string>();
+  const downstreamTargets = new Set<string>();
 
-  // Collect all target nodes with cycle protection
-  const allTargetNodes: ProductionNode[] = [];
+  // Step 1: Collect all target node keys
   const collectTargets = (node: ProductionNode, visited: Set<string>) => {
     const key = createFlowNodeKey(node);
-
-    // Prevent infinite loops in circular dependencies
-    if (visited.has(key)) {
-      return;
-    }
+    if (visited.has(key)) return;
     visited.add(key);
-
-    if (node.isTarget) {
-      allTargetNodes.push(node);
-    }
-
+    if (node.isTarget) allTargets.add(key);
     node.dependencies.forEach((dep) => collectTargets(dep, visited));
   };
-
   rootNodes.forEach((root) => collectTargets(root, new Set()));
 
-  // For each target, check if any other target depends on it
-  allTargetNodes.forEach((targetNode) => {
-    const targetKey = createFlowNodeKey(targetNode);
+  // Step 2: For each target, mark any target in its dependency tree as upstream
+  const markUpstreamTargets = (
+    originKey: string,
+    node: ProductionNode,
+    visited: Set<string>,
+  ) => {
+    const key = createFlowNodeKey(node);
+    if (visited.has(key)) return;
+    visited.add(key);
 
-    // Check all other targets' dependency trees
-    allTargetNodes.forEach((otherTarget) => {
-      if (otherTarget === targetNode) return;
+    if (key !== originKey && allTargets.has(key)) {
+      downstreamTargets.add(key);
+    }
+    node.dependencies.forEach((dep) =>
+      markUpstreamTargets(originKey, dep, visited),
+    );
+  };
 
-      // Traverse this target's dependencies to see if it includes targetNode
-      // Use visited set to prevent infinite loops
-      const hasDependency = (
-        node: ProductionNode,
-        visited: Set<string>,
-      ): boolean => {
-        const nodeKey = createFlowNodeKey(node);
-
-        // Prevent infinite loops
-        if (visited.has(nodeKey)) {
-          return false;
-        }
-        visited.add(nodeKey);
-
-        if (nodeKey === targetKey) return true;
-        return node.dependencies.some((dep) => hasDependency(dep, visited));
-      };
-
-      if (
-        otherTarget.dependencies.some((dep) => hasDependency(dep, new Set()))
-      ) {
-        targetsWithDownstream.add(targetKey);
-      }
-    });
+  rootNodes.forEach((root) => {
+    const key = createFlowNodeKey(root);
+    if (root.isTarget) {
+      root.dependencies.forEach((dep) =>
+        markUpstreamTargets(key, dep, new Set()),
+      );
+    }
   });
 
-  return targetsWithDownstream;
+  return downstreamTargets;
 }
 
 export function shouldSkipNode(

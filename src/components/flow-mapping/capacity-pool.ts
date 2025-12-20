@@ -41,21 +41,11 @@ export class CapacityPoolManager {
     const facilities: FacilityInstance[] = [];
 
     for (let i = 0; i < facilityCount; i++) {
-      let actualOutputRate: number;
-
-      if (i < facilityCount - 1) {
-        // All facilities except the last one run at full capacity
-        actualOutputRate = capacityPerFacility;
-      } else {
-        // Last facility may run at partial capacity
-        const fractionalPart =
-          node.facilityCount - Math.floor(node.facilityCount);
-        if (fractionalPart > 0) {
-          actualOutputRate = capacityPerFacility * fractionalPart;
-        } else {
-          actualOutputRate = capacityPerFacility;
-        }
-      }
+      const remainingCapacity = node.targetRate - i * capacityPerFacility;
+      const actualOutputRate = Math.max(
+        0,
+        Math.min(capacityPerFacility, remainingCapacity),
+      );
 
       facilities.push({
         facilityId: `${nodeKey}-f${i}`,
