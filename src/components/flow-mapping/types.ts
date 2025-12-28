@@ -135,15 +135,6 @@ export interface TargetSinkNodeData {
 export type FlowTargetNode = Node<TargetSinkNodeData>;
 
 /**
- * Union type for all possible production flow node data types.
- */
-export type AllFlowNodeData =
-  | FlowNodeData
-  | FlowNodeDataSeparated
-  | FlowNodeDataWithTarget
-  | FlowNodeDataSeparatedWithTarget;
-
-/**
  * Updated FlowProductionNode that can include target information.
  */
 export type FlowProductionNode =

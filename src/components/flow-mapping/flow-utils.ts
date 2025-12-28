@@ -1,4 +1,3 @@
-import type { ItemId } from "@/types";
 import type { ProductionNode } from "@/lib/calculator";
 
 /**
@@ -75,23 +74,6 @@ export function aggregateProductionNodes(
 
   rootNodes.forEach(collect);
   return nodeMap;
-}
-
-/**
- * Creates a map from ItemId to its target rate for quick lookup.
- * @param originalTargets Array of user-defined targets
- * @returns A Map where key is ItemId and value is target rate
- */
-export function createTargetMap(
-  originalTargets?: Array<{ itemId: ItemId; rate: number }>,
-): Map<ItemId, number> {
-  const targetMap = new Map<ItemId, number>();
-  if (originalTargets) {
-    originalTargets.forEach((target) => {
-      targetMap.set(target.itemId, target.rate);
-    });
-  }
-  return targetMap;
 }
 
 /**
