@@ -4,7 +4,7 @@ import type { Item, Facility, ItemId } from "@/types";
 import type { DetectedCycle, ProductionNode } from "@/lib/calculator";
 import type { FlowProductionNode, FlowTargetNode } from "./types";
 import { CapacityPoolManager } from "./capacity-pool";
-import { applyEdgeStyling } from "./edge-styling";
+import { applyEdgeStyling } from "./flow-utils";
 import {
   createFlowNodeKey,
   aggregateProductionNodes,
@@ -194,9 +194,6 @@ export function mapPlanToFlowSeparated(
                       allocation.sourceNodeId,
                       consumerFacility.facilityId,
                       allocation.allocatedAmount,
-                      {
-                        isPartOfCycle: true,
-                      },
                     ),
                   );
                 });
@@ -266,10 +263,6 @@ export function mapPlanToFlowSeparated(
               allocation.sourceNodeId,
               targetNodeId,
               allocation.allocatedAmount,
-              {
-                animated: true,
-                style: { stroke: "#10b981", strokeWidth: 2 },
-              },
             ),
           );
         });
@@ -356,17 +349,6 @@ export function mapPlanToFlowSeparated(
           breakPointFacility.facilityId,
           targetConsumer.facilityId,
           flowFromThisFacility,
-          {
-            isCycleClosure: true,
-            animated: true,
-            style: {
-              stroke: "#a855f7",
-              strokeWidth: 2.5,
-              strokeDasharray: "5,5",
-            },
-            labelStyle: { fill: "#a855f7", fontWeight: 600 },
-            labelBgStyle: { fill: "#faf5ff" },
-          },
         ),
       );
 
@@ -421,11 +403,6 @@ function createTargetDependencyEdgesWithCycles(
                 allocation.sourceNodeId,
                 targetNodeId,
                 allocation.allocatedAmount,
-                {
-                  isPartOfCycle: true,
-                  animated: true,
-                  style: { stroke: "#10b981", strokeWidth: 2 },
-                },
               ),
             );
           });
@@ -437,10 +414,6 @@ function createTargetDependencyEdgesWithCycles(
           `node-${depKey}`,
           targetNodeId,
           demandRate,
-          {
-            animated: true,
-            style: { stroke: "#10b981", strokeWidth: 2 },
-          },
         ),
       );
     } else {
@@ -451,10 +424,6 @@ function createTargetDependencyEdgesWithCycles(
             allocation.sourceNodeId,
             targetNodeId,
             allocation.allocatedAmount,
-            {
-              animated: true,
-              style: { stroke: "#10b981", strokeWidth: 2 },
-            },
           ),
         );
       });

@@ -217,48 +217,84 @@ export function isCircularBreakpoint(
 }
 
 /**
- * Creates a standardized edge for React Flow
+ * Creates a standardized edge for React Flow with unified styling.
+ * All edges use gray color with width based on flow rate.
+ *
+ * @param id Unique edge identifier
+ * @param source Source node ID
+ * @param target Target node ID
+ * @param flowRate Flow rate in items per minute
  */
 export function createEdge(
   id: string,
   source: string,
   target: string,
   flowRate: number,
-  options: {
-    isPartOfCycle?: boolean;
-    isCycleClosure?: boolean;
-    animated?: boolean;
-    style?: React.CSSProperties;
-    labelStyle?: React.CSSProperties;
-    labelBgStyle?: React.CSSProperties;
-    sourceHandle?: string;
-    targetHandle?: string;
-  } = {},
 ): Edge {
-  const label = options.isCycleClosure
-    ? `🔄 ${flowRate.toFixed(2)} /min`
-    : `${flowRate.toFixed(2)} /min`;
-
   return {
     id,
     source,
     target,
     type: "default",
-    label,
+    label: `${flowRate.toFixed(2)} /min`,
     data: {
       flowRate,
-      isPartOfCycle: options.isPartOfCycle,
-      isCycleClosure: options.isCycleClosure,
     },
-    sourceHandle: options.sourceHandle,
-    targetHandle: options.targetHandle,
-    animated: options.animated,
-    style: options.style,
-    labelStyle: options.labelStyle,
-    labelBgStyle: options.labelBgStyle,
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: (options.style?.stroke as string) || "#64748b",
+      color: "#64748b",
     },
   };
+}
+
+/**
+ * Applies dynamic styling to edges based on their flow rates.
+ *
+ * All edges use consistent gray styling with width proportional to flow rate.
+ *
+ * @param edges Array of edges to style
+ * @returns The same edges array with style properties applied
+ */
+export function applyEdgeStyling(edges: Edge[]): Edge[] {
+  if (edges.length === 0) return edges;
+
+  // Find max flow rate for normalization
+  const flowRates: number[] = [];
+
+  edges.forEach((e) => {
+    const data = e.data as { flowRate?: number } | undefined;
+    if (data?.flowRate !== undefined) {
+      flowRates.push(data.flowRate);
+    }
+  });
+
+  const maxFlowRate = Math.max(...flowRates, 1);
+
+  return edges.map((edge) => {
+    const data = edge.data as { flowRate?: number } | undefined;
+
+    // Return unchanged if no valid data
+    if (!data || typeof data.flowRate !== "number") {
+      return edge;
+    }
+
+    const flowRate = data.flowRate;
+
+    // Calculate stroke width based on flow rate (1-4 range)
+    const normalizedRate = flowRate / maxFlowRate;
+    const strokeWidth = 1 + normalizedRate * 3;
+
+    // Unified gray styling for all edges
+    return {
+      ...edge,
+      style: {
+        strokeWidth,
+        stroke: "#64748b",
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "#64748b",
+      },
+    };
+  });
 }

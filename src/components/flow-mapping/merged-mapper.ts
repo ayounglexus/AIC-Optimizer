@@ -1,9 +1,9 @@
 import { Position } from "@xyflow/react";
 import type { Node, Edge } from "@xyflow/react";
-import type { Item, Facility, ItemId } from "@/types";
+import type { Item, Facility } from "@/types";
 import type { ProductionNode, DetectedCycle } from "@/lib/calculator";
 import type { FlowNodeData, FlowProductionNode, FlowTargetNode } from "./types";
-import { applyEdgeStyling } from "./edge-styling";
+import { applyEdgeStyling } from "./flow-utils";
 import {
   createFlowNodeKey,
   aggregateProductionNodes,
@@ -72,7 +72,6 @@ export function mapPlanToFlowMerged(
     node: ProductionNode,
     parentId: string | null = null,
     edgeIdCounter: { count: number },
-    parentKey?: string,
   ): string => {
     const nodeId = getOrCreateNodeId(node);
     const key = createFlowNodeKey(node);
@@ -80,33 +79,19 @@ export function mapPlanToFlowMerged(
     // Handle cycle placeholder
     if (node.isCyclePlaceholder) {
       if (parentId && parentId !== nodeId) {
-        const sourceLevel = getNodeLevel(node, key);
-        const targetLevel = parentKey
-          ? getNodeLevel(node, parentKey)
-          : sourceLevel;
-        const handlePositions = determineHandlePositions(
-          sourceLevel,
-          targetLevel,
-          true,
-        );
-
         edges.push(
           createEdge(
             `e${edgeIdCounter.count++}`,
             nodeId,
             parentId,
             node.targetRate,
-            {
-              isPartOfCycle: true,
-              ...handlePositions,
-            },
           ),
         );
       }
       return nodeId;
     }
 
-    // Skip targets without downstream (inline shouldSkipNode)
+    // Skip targets without downstream
     if (node.isTarget && !targetsWithDownstream.has(key)) {
       node.dependencies.forEach((dep) => traverse(dep, null, edgeIdCounter));
       return nodeId;
@@ -153,43 +138,20 @@ export function mapPlanToFlowMerged(
       );
 
       if (!edgeExists) {
-        const isPartOfCycle = isEdgePartOfCycle(
-          node.item.id,
-          parentId,
-          nodeKeyToId,
-          detectedCycles,
-        );
-        const sourceLevel = getNodeLevel(node, key);
-        const targetLevel = parentKey
-          ? getNodeLevel(node, parentKey)
-          : sourceLevel;
-        const handlePositions = determineHandlePositions(
-          sourceLevel,
-          targetLevel,
-          isPartOfCycle,
-        );
-
         edges.push(
           createEdge(
             `e${edgeIdCounter.count++}`,
             nodeId,
             parentId,
             node.targetRate,
-            {
-              isPartOfCycle,
-              ...handlePositions,
-            },
           ),
         );
       }
     }
 
-    node.dependencies.forEach((dep) =>
-      traverse(dep, nodeId, edgeIdCounter, key),
-    );
+    node.dependencies.forEach((dep) => traverse(dep, nodeId, edgeIdCounter));
     return nodeId;
   };
-
   const edgeIdCounter = { count: 0 };
   rootNodes.forEach((root) => traverse(root, null, edgeIdCounter));
 
@@ -230,10 +192,6 @@ export function mapPlanToFlowMerged(
           nodeId,
           targetNodeId,
           data.totalRate,
-          {
-            animated: true,
-            style: { stroke: "#10b981", strokeWidth: 2 },
-          },
         ),
       );
     } else {
@@ -255,56 +213,6 @@ export function mapPlanToFlowMerged(
       | FlowTargetNode
     )[],
     edges: applyEdgeStyling(edges),
-  };
-}
-
-/**
- * Helper: Determines if an edge is part of a production cycle
- */
-function isEdgePartOfCycle(
-  sourceItemId: ItemId,
-  targetNodeId: string,
-  nodeKeyToId: Map<string, string>,
-  detectedCycles: DetectedCycle[],
-): boolean {
-  const sourceCycle = detectedCycles.find((c) =>
-    c.involvedItemIds.includes(sourceItemId),
-  );
-  if (!sourceCycle) return false;
-
-  for (const [key, nodeId] of nodeKeyToId.entries()) {
-    if (nodeId === targetNodeId) {
-      const targetItemId = key.split("__")[0] as ItemId;
-      return sourceCycle.involvedItemIds.includes(targetItemId);
-    }
-  }
-  return false;
-}
-
-/**
- * Helper: Determines handle positions based on node levels
- */
-function determineHandlePositions(
-  sourceLevel: number,
-  targetLevel: number,
-  isPartOfCycle: boolean,
-) {
-  const levelDiff = Math.abs(sourceLevel - targetLevel);
-
-  if (isPartOfCycle && levelDiff <= 1) {
-    return {
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
-      sourceHandle: "bottom",
-      targetHandle: "top",
-    };
-  }
-
-  return {
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    sourceHandle: "right",
-    targetHandle: "left",
   };
 }
 
@@ -338,10 +246,6 @@ function createTargetDependencyEdges(
         depNodeId,
         targetNodeId,
         flowRate,
-        {
-          animated: true,
-          style: { stroke: "#10b981", strokeWidth: 2 },
-        },
       ),
     );
   });
