@@ -21,22 +21,37 @@ export type ProductionNode = {
   isTarget: boolean;
   dependencies: ProductionNode[];
   manualRawMaterials?: Set<ItemId>;
+  level?: number;
+
+  // Cycle support fields
+  isCyclePlaceholder?: boolean;
+  cycleItemId?: ItemId;
+  isPartOfCycle?: boolean;
+  cycleId?: string;
+};
+
+/**
+ * Represents a detected production cycle in the dependency graph.
+ */
+export type DetectedCycle = {
+  cycleId: string;
+  involvedItemIds: ItemId[];
+  breakPointItemId: ItemId;
+  cycleNodes: ProductionNode[];
+  netOutputs: Map<ItemId, number>;
 };
 
 /**
  * The unified output structure for the production plan.
- * It contains both the raw dependency trees and the merged/flattened list for statistics.
  */
 export type UnifiedProductionPlan = {
-  /** The unmerged root nodes, suitable for dependency tree visualization. */
   dependencyRootNodes: ProductionNode[];
-  /** The merged and sorted list of production steps, suitable for tables and statistics. */
   flatList: ProductionNode[];
-  /** Total electrical power consumption for all facilities. */
   totalPowerConsumption: number;
-  /** Map of ItemId to the required rate of raw materials (items with no recipes). */
   rawMaterialRequirements: Map<ItemId, number>;
   manualRawMaterials?: Set<ItemId>;
+  detectedCycles: DetectedCycle[];
+  keyToLevel?: Map<string, number>;
 };
 
 export type RecipeSelector = (
@@ -47,23 +62,13 @@ export type RecipeSelector = (
 const defaultRecipeSelector: RecipeSelector = (recipes) => recipes[0];
 
 export const smartRecipeSelector: RecipeSelector = (recipes, visitedPath) => {
-  if (!visitedPath || visitedPath.size === 0) {
-    return defaultRecipeSelector(recipes);
-  }
+  if (!visitedPath?.size) return defaultRecipeSelector(recipes);
 
-  // Find recipes that don't create circular dependencies
-  const nonCircularRecipes = recipes.filter((recipe) => {
-    // Check if any input would create a circular dependency
-    const hasCircularInput = recipe.inputs.some((input) =>
-      visitedPath.has(input.itemId),
-    );
+  const nonCircular = recipes.filter(
+    (r) => !r.inputs.some((input) => visitedPath.has(input.itemId)),
+  );
 
-    return !hasCircularInput;
-  });
-
-  return nonCircularRecipes.length > 0
-    ? nonCircularRecipes[0]
-    : defaultRecipeSelector(recipes);
+  return nonCircular.length > 0 ? nonCircular[0] : recipes[0];
 };
 
 type ProductionMaps = {
@@ -72,7 +77,6 @@ type ProductionMaps = {
   facilityMap: Map<FacilityId, Facility>;
 };
 
-/** Represents a production node after merging duplicates and tracking dependencies. */
 type MergedNode = {
   item: Item;
   totalRate: number;
@@ -84,91 +88,101 @@ type MergedNode = {
   dependencies: Set<string>;
 };
 
-/** Generates a unique key for a production node based on its item, recipe, and raw material status. */
-function createNodeKey(
+// Helper: get value from map or throw
+const getOrThrow = <K, V>(map: Map<K, V>, key: K, type: string): V => {
+  const value = map.get(key);
+  if (!value) throw new Error(`${type} not found: ${key}`);
+  return value;
+};
+
+// Helper: calculate production rate per facility
+const calcRate = (amount: number, craftingTime: number): number =>
+  (amount * 60) / craftingTime;
+
+// Helper: create node key
+const createNodeKey = (
   itemId: ItemId,
   recipeId: RecipeId | null,
-  isRawMaterial: boolean,
-): string {
-  return isRawMaterial ? `raw_${itemId}` : `${itemId}_${recipeId}`;
-}
+  isRaw: boolean,
+): string => (isRaw ? `raw_${itemId}` : `${itemId}_${recipeId}`);
 
-/** Recursively collects all item IDs that are *produced* (i.e., not raw materials) within the given production nodes. */
-function collectProducedItems(nodes: ProductionNode[]): Set<ItemId> {
-  const producedItemIds = new Set<ItemId>();
-
-  const collect = (node: ProductionNode) => {
-    if (!node.isRawMaterial && node.recipe) {
-      producedItemIds.add(node.item.id);
-    }
-    node.dependencies.forEach(collect);
+// Helper: generic tree traversal
+const traverseTree = (
+  nodes: ProductionNode[],
+  visitor: (node: ProductionNode) => void,
+  skipPlaceholders = true,
+) => {
+  const visit = (node: ProductionNode) => {
+    if (skipPlaceholders && node.isCyclePlaceholder) return;
+    visitor(node);
+    node.dependencies.forEach(visit);
   };
+  nodes.forEach(visit);
+};
 
-  nodes.forEach(collect);
-  return producedItemIds;
+/** Collects all produced (non-raw) item IDs */
+function collectProducedItems(nodes: ProductionNode[]): Set<ItemId> {
+  const produced = new Set<ItemId>();
+  traverseTree(nodes, (node) => {
+    if (!node.isRawMaterial && node.recipe) {
+      produced.add(node.item.id);
+    }
+  });
+  return produced;
 }
 
-/** Determines if a node represents a circular dependency that is being treated as a raw material to break the cycle. */
-function isCircularDependency(
-  node: ProductionNode,
-  producedItemIds: Set<ItemId>,
-): boolean {
-  // A node is a circular dependency if it's marked as a raw material,
-  // but it is an item that is actually produced somewhere else in the graph.
-  return node.isRawMaterial && producedItemIds.has(node.item.id);
-}
+/** Checks if node is a circular dependency */
+const isCircularDep = (node: ProductionNode, produced: Set<ItemId>): boolean =>
+  !node.isCyclePlaceholder && node.isRawMaterial && produced.has(node.item.id);
 
-/** Merges duplicate production nodes and aggregates their rates and facility counts. It also collects and consolidates dependencies. */
+/** Merges duplicate production nodes */
 function mergeProductionNodes(
   rootNodes: ProductionNode[],
   producedItemIds: Set<ItemId>,
 ): Map<string, MergedNode> {
-  const mergedNodes = new Map<string, MergedNode>();
+  const merged = new Map<string, MergedNode>();
 
-  const collectNodes = (node: ProductionNode) => {
-    if (isCircularDependency(node, producedItemIds)) {
-      return;
-    }
+  traverseTree(rootNodes, (node) => {
+    if (isCircularDep(node, producedItemIds)) return;
 
     const key = createNodeKey(
       node.item.id,
       node.recipe?.id || null,
       node.isRawMaterial,
     );
+    const existing = merged.get(key);
 
-    const existing = mergedNodes.get(key);
     if (existing) {
       existing.totalRate += node.targetRate;
       existing.totalFacilityCount += node.facilityCount;
-
-      if (node.isTarget && !existing.isTarget) {
-        existing.isTarget = true;
-      }
+      if (node.isTarget) existing.isTarget = true;
 
       node.dependencies.forEach((dep) => {
-        if (!isCircularDependency(dep, producedItemIds)) {
-          const depKey = createNodeKey(
-            dep.item.id,
-            dep.recipe?.id || null,
-            dep.isRawMaterial,
+        if (!isCircularDep(dep, producedItemIds)) {
+          existing.dependencies.add(
+            createNodeKey(
+              dep.item.id,
+              dep.recipe?.id || null,
+              dep.isRawMaterial,
+            ),
           );
-          existing.dependencies.add(depKey);
         }
       });
     } else {
       const dependencies = new Set<string>();
       node.dependencies.forEach((dep) => {
-        if (!isCircularDependency(dep, producedItemIds)) {
-          const depKey = createNodeKey(
-            dep.item.id,
-            dep.recipe?.id || null,
-            dep.isRawMaterial,
+        if (!isCircularDep(dep, producedItemIds)) {
+          dependencies.add(
+            createNodeKey(
+              dep.item.id,
+              dep.recipe?.id || null,
+              dep.isRawMaterial,
+            ),
           );
-          dependencies.add(depKey);
         }
       });
 
-      mergedNodes.set(key, {
+      merged.set(key, {
         item: node.item,
         totalRate: node.targetRate,
         recipe: node.recipe,
@@ -179,162 +193,132 @@ function mergeProductionNodes(
         dependencies,
       });
     }
+  });
 
-    node.dependencies.forEach(collectNodes);
-  };
-
-  rootNodes.forEach(collectNodes);
-  return mergedNodes;
+  return merged;
 }
 
-/**
- * Performs a topological sort on merged production nodes.
- * The sort order is from producers (raw materials) to consumers (final products).
- */
-function topologicalSort(mergedNodes: Map<string, MergedNode>): string[] {
-  const sortedKeys: string[] = [];
+/** Topological sort from producers to consumers */
+function topologicalSort(merged: Map<string, MergedNode>): string[] {
   const dependentCount = new Map<string, number>();
-  const keyToNode = new Map(mergedNodes);
 
-  // Initialize dependent counts (how many nodes depend on this node)
-  keyToNode.forEach((_, key) => dependentCount.set(key, 0));
-
-  // Calculate dependent counts for each node
-  keyToNode.forEach((node) => {
+  merged.forEach((_, key) => dependentCount.set(key, 0));
+  merged.forEach((node) => {
     node.dependencies.forEach((depKey) => {
-      // Increment the dependent count of the dependency (producer)
-      if (keyToNode.has(depKey)) {
+      if (merged.has(depKey)) {
         dependentCount.set(depKey, (dependentCount.get(depKey) || 0) + 1);
       }
     });
   });
 
-  // Initialize the queue with nodes that have no dependents (final products)
   const queue: string[] = [];
-  keyToNode.forEach((_, key) => {
-    if (dependentCount.get(key) === 0) {
-      queue.push(key);
-    }
+  dependentCount.forEach((count, key) => {
+    if (count === 0) queue.push(key);
   });
 
-  // Process nodes from final products to raw materials
+  const sorted: string[] = [];
   while (queue.length > 0) {
     const key = queue.shift()!;
-    sortedKeys.push(key);
+    sorted.push(key);
 
-    const node = keyToNode.get(key)!;
-
-    // Decrement the dependent count of dependencies
-    node.dependencies.forEach((depKey) => {
-      if (keyToNode.has(depKey)) {
-        const currentCount = dependentCount.get(depKey)! - 1;
-        dependentCount.set(depKey, currentCount);
-
-        // If a dependency now has no remaining dependents, add it to the queue
-        if (currentCount === 0) {
-          queue.push(depKey);
-        }
+    merged.get(key)!.dependencies.forEach((depKey) => {
+      if (merged.has(depKey)) {
+        const newCount = dependentCount.get(depKey)! - 1;
+        dependentCount.set(depKey, newCount);
+        if (newCount === 0) queue.push(depKey);
       }
     });
   }
 
-  // Reverse to get producer-to-consumer order
-  return sortedKeys.reverse();
+  return sorted.reverse();
 }
 
-/** Calculates the depth level for each node in the dependency graph, where raw materials are at level 0. */
+/** Calculates depth levels for nodes */
 function calculateNodeLevels(
   sortedKeys: string[],
-  mergedNodes: Map<string, MergedNode>,
+  merged: Map<string, MergedNode>,
 ): Map<string, number> {
-  const keyToLevel = new Map<string, number>();
+  const levels = new Map<string, number>();
 
-  const calculateLevel = (key: string): number => {
-    if (keyToLevel.has(key)) {
-      return keyToLevel.get(key)!;
-    }
+  const calcLevel = (key: string): number => {
+    if (levels.has(key)) return levels.get(key)!;
 
-    const node = mergedNodes.get(key);
-    // Base case: raw material or node with no dependencies is level 0
+    const node = merged.get(key);
     if (!node || node.dependencies.size === 0) {
-      keyToLevel.set(key, 0);
+      levels.set(key, 0);
       return 0;
     }
 
     let maxDepLevel = -1;
     node.dependencies.forEach((depKey) => {
-      if (mergedNodes.has(depKey)) {
-        maxDepLevel = Math.max(maxDepLevel, calculateLevel(depKey));
+      if (merged.has(depKey)) {
+        maxDepLevel = Math.max(maxDepLevel, calcLevel(depKey));
       }
     });
 
     const level = maxDepLevel + 1;
-    keyToLevel.set(key, level);
+    levels.set(key, level);
     return level;
   };
 
-  // Calculate levels in the topologically sorted order
-  sortedKeys.forEach((key) => calculateLevel(key));
-  return keyToLevel;
+  sortedKeys.forEach(calcLevel);
+  return levels;
 }
 
-/** Sorts node keys by their calculated level (deepest first) and then by item tier (highest first within each level). */
+/** Sorts by level (deepest first) then tier (highest first) */
 function sortByLevelAndTier(
   sortedKeys: string[],
-  mergedNodes: Map<string, MergedNode>,
+  merged: Map<string, MergedNode>,
 ): string[] {
-  const keyToLevel = calculateNodeLevels(sortedKeys, mergedNodes);
-
+  const keyToLevel = calculateNodeLevels(sortedKeys, merged);
   const levels = new Map<number, string[]>();
+
   sortedKeys.forEach((key) => {
     const level = keyToLevel.get(key)!;
-    if (!levels.has(level)) {
-      levels.set(level, []);
-    }
+    if (!levels.has(level)) levels.set(level, []);
     levels.get(level)!.push(key);
   });
 
-  // Sort levels from deepest (highest number) to shallowest (0)
-  const sortedLevels = Array.from(levels.keys()).sort((a, b) => b - a);
-
   const result: string[] = [];
-  sortedLevels.forEach((level) => {
-    const keysInLevel = levels.get(level)!;
-    // Sort items within the same level by their tier (higher tier first)
-    keysInLevel.sort((a, b) => {
-      const nodeA = mergedNodes.get(a)!;
-      const nodeB = mergedNodes.get(b)!;
-      return nodeB.item.tier - nodeA.item.tier;
+  Array.from(levels.keys())
+    .sort((a, b) => b - a)
+    .forEach((level) => {
+      const keysInLevel = levels.get(level)!;
+      keysInLevel.sort(
+        (a, b) => merged.get(b)!.item.tier - merged.get(a)!.item.tier,
+      );
+      result.push(...keysInLevel);
     });
-    result.push(...keysInLevel);
-  });
 
   return result;
 }
 
-/**
- * Constructs the final flattened plan components (list, power, raw materials)
- * from the merged and sorted production nodes.
- */
+/** Builds final plan components */
 function buildFinalPlanComponents(
   sortedKeys: string[],
-  mergedNodes: Map<string, MergedNode>,
-): Omit<UnifiedProductionPlan, "dependencyRootNodes"> {
-  const rawMaterialRequirements = new Map<ItemId, number>();
-  let totalPowerConsumption = 0;
+  merged: Map<string, MergedNode>,
+): {
+  flatList: ProductionNode[];
+  totalPowerConsumption: number;
+  rawMaterialRequirements: Map<ItemId, number>;
+  keyToLevel: Map<string, number>;
+} {
+  const rawMaterials = new Map<ItemId, number>();
+  let totalPower = 0;
   const flatList: ProductionNode[] = [];
+  const keyToLevel = calculateNodeLevels(sortedKeys, merged);
 
   sortedKeys.forEach((key) => {
-    const node = mergedNodes.get(key)!;
+    const node = merged.get(key)!;
+    const level = keyToLevel.get(key) || 0;
 
     if (node.isRawMaterial) {
-      rawMaterialRequirements.set(
+      rawMaterials.set(
         node.item.id,
-        (rawMaterialRequirements.get(node.item.id) || 0) + node.totalRate,
+        (rawMaterials.get(node.item.id) || 0) + node.totalRate,
       );
     } else if (node.facility) {
-      totalPowerConsumption +=
-        node.facility.powerConsumption * node.totalFacilityCount;
+      totalPower += node.facility.powerConsumption * node.totalFacilityCount;
     }
 
     flatList.push({
@@ -346,176 +330,439 @@ function buildFinalPlanComponents(
       isRawMaterial: node.isRawMaterial,
       isTarget: node.isTarget,
       dependencies: [],
+      level,
     });
   });
 
-  return { flatList, totalPowerConsumption, rawMaterialRequirements };
-}
-
-/**
- * Recursively calculates a single production node, determining required facilities and inputs.
- * Handles circular dependencies by treating the looped item as a raw material for that branch.
- */
-function calculateNode(
-  itemId: ItemId,
-  requiredRate: number,
-  maps: ProductionMaps,
-  recipeOverrides?: Map<ItemId, RecipeId>,
-  recipeSelector: RecipeSelector = defaultRecipeSelector,
-  visitedPath: Set<ItemId> = new Set(),
-  isDirectTarget: boolean = false,
-  manualRawMaterials?: Set<ItemId>,
-): ProductionNode {
-  const item = maps.itemMap.get(itemId);
-  if (!item) throw new Error(`Item not found: ${itemId}`);
-
-  // Check for circular dependency
-  if (visitedPath.has(itemId)) {
-    return {
-      item,
-      targetRate: requiredRate,
-      recipe: null,
-      facility: null,
-      facilityCount: 0,
-      isRawMaterial: true,
-      isTarget: false,
-      dependencies: [],
-    };
-  }
-
-  // Check if manually marked as raw material
-  if (manualRawMaterials?.has(itemId)) {
-    return {
-      item,
-      targetRate: requiredRate,
-      recipe: null,
-      facility: null,
-      facilityCount: 0,
-      isRawMaterial: true,
-      isTarget: isDirectTarget,
-      dependencies: [],
-    };
-  }
-
-  const availableRecipes = Array.from(maps.recipeMap.values()).filter((r) =>
-    r.outputs.some((o) => o.itemId === itemId),
-  );
-
-  if (availableRecipes.length === 0) {
-    return {
-      item,
-      targetRate: requiredRate,
-      recipe: null,
-      facility: null,
-      facilityCount: 0,
-      isRawMaterial: true,
-      isTarget: isDirectTarget,
-      dependencies: [],
-    };
-  }
-
-  // Add current item to visited path BEFORE recipe selection
-  const newVisitedPath = new Set(visitedPath);
-  newVisitedPath.add(itemId);
-
-  // Recipe selection logic - now with current item in visitedPath
-  let selectedRecipe: Recipe;
-  if (recipeOverrides?.has(itemId)) {
-    const overrideRecipe = maps.recipeMap.get(recipeOverrides.get(itemId)!);
-    if (!overrideRecipe)
-      throw new Error(`Override recipe not found for ${itemId}`);
-    selectedRecipe = overrideRecipe;
-  } else {
-    selectedRecipe = recipeSelector(availableRecipes, newVisitedPath);
-  }
-
-  const facility = maps.facilityMap.get(selectedRecipe.facilityId);
-  if (!facility)
-    throw new Error(`Facility not found: ${selectedRecipe.facilityId}`);
-
-  // Production rate calculation
-  const outputAmount =
-    selectedRecipe.outputs.find((o) => o.itemId === itemId)?.amount || 0;
-  const cyclesPerMinute = 60 / selectedRecipe.craftingTime;
-  const outputRatePerFacility = outputAmount * cyclesPerMinute;
-
-  // Calculate required facilities
-  const facilityCount = requiredRate / outputRatePerFacility;
-
-  // Recursively calculate dependencies (inputs)
-  const dependencies = selectedRecipe.inputs.map((input) => {
-    const inputRate = input.amount * cyclesPerMinute * facilityCount;
-    return calculateNode(
-      input.itemId,
-      inputRate,
-      maps,
-      recipeOverrides,
-      recipeSelector,
-      newVisitedPath,
-      false,
-      manualRawMaterials,
-    );
-  });
-
   return {
-    item,
-    targetRate: requiredRate,
-    recipe: selectedRecipe,
-    facility,
-    facilityCount,
-    isRawMaterial: false,
-    isTarget: isDirectTarget,
-    dependencies,
+    flatList,
+    totalPowerConsumption: totalPower,
+    rawMaterialRequirements: rawMaterials,
+    keyToLevel,
   };
 }
 
-/**
- * Generates the raw, unmerged dependency trees for all targets.
- */
+/** Reconstructs a cycle for visualization */
+function reconstructCycle(
+  cyclePath: ItemId[],
+  maps: ProductionMaps,
+  recipeOverrides?: Map<ItemId, RecipeId>,
+  recipeSelector: RecipeSelector = defaultRecipeSelector,
+  manualRawMaterials?: Set<ItemId>,
+): ProductionNode[] {
+  const cycleNodes: ProductionNode[] = [];
+  const pathSet = new Set(cyclePath);
+
+  for (let i = 0; i < cyclePath.length; i++) {
+    const itemId = cyclePath[i];
+    const nextItemId = cyclePath[(i + 1) % cyclePath.length];
+
+    if (manualRawMaterials?.has(itemId)) continue;
+
+    const item = maps.itemMap.get(itemId);
+    if (!item) continue;
+
+    const availableRecipes = Array.from(maps.recipeMap.values()).filter((r) =>
+      r.outputs.some((o) => o.itemId === itemId),
+    );
+    if (availableRecipes.length === 0) continue;
+
+    let selectedRecipe: Recipe;
+    if (recipeOverrides?.has(itemId)) {
+      const override = maps.recipeMap.get(recipeOverrides.get(itemId)!);
+      if (!override) continue;
+      selectedRecipe = override;
+    } else {
+      const compatible = availableRecipes.filter((r) =>
+        r.inputs.some((input) => input.itemId === nextItemId),
+      );
+      const recipesToSelect =
+        compatible.length > 0 ? compatible : availableRecipes;
+      selectedRecipe = recipeSelector(
+        recipesToSelect,
+        new Set(cyclePath.slice(0, i + 1)),
+      );
+    }
+
+    const facility = maps.facilityMap.get(selectedRecipe.facilityId);
+    if (!facility) continue;
+
+    const outputAmount =
+      selectedRecipe.outputs.find((o) => o.itemId === itemId)?.amount || 0;
+    const rate = calcRate(outputAmount, selectedRecipe.craftingTime);
+    const facilityCount = 1 / rate;
+
+    const dependencies = selectedRecipe.inputs.map((input) => {
+      const depItem = getOrThrow(maps.itemMap, input.itemId, "Dependency item");
+      return {
+        item: depItem,
+        targetRate:
+          calcRate(input.amount, selectedRecipe.craftingTime) * facilityCount,
+        recipe: null,
+        facility: null,
+        facilityCount: 0,
+        isRawMaterial: !pathSet.has(input.itemId),
+        isTarget: false,
+        dependencies: [],
+      } as ProductionNode;
+    });
+
+    cycleNodes.push({
+      item,
+      targetRate: 1,
+      recipe: selectedRecipe,
+      facility,
+      facilityCount,
+      isRawMaterial: false,
+      isTarget: false,
+      dependencies,
+    });
+  }
+
+  return cycleNodes;
+}
+
+/** Calculates net outputs of a cycle */
+function calculateCycleNetOutputs(
+  cycleNodes: ProductionNode[],
+): Map<ItemId, number> {
+  const production = new Map<ItemId, number>();
+  const consumption = new Map<ItemId, number>();
+
+  cycleNodes.forEach((node) => {
+    if (!node.recipe) return;
+
+    node.recipe.outputs.forEach((output) => {
+      production.set(
+        output.itemId,
+        (production.get(output.itemId) || 0) + output.amount,
+      );
+    });
+
+    node.recipe.inputs.forEach((input) => {
+      consumption.set(
+        input.itemId,
+        (consumption.get(input.itemId) || 0) + input.amount,
+      );
+    });
+  });
+
+  const netOutputs = new Map<ItemId, number>();
+  production.forEach((produced, itemId) => {
+    const net = produced - (consumption.get(itemId) || 0);
+    if (Math.abs(net) > 0.001) {
+      netOutputs.set(itemId, net);
+    }
+  });
+
+  return netOutputs;
+}
+
+/** Solves a 2-step cycle for steady-state operation */
+function solveCycleForOutput(
+  detectedCycle: DetectedCycle,
+  targetItemId: ItemId,
+  targetOutputRate: number,
+  maps: ProductionMaps,
+): Map<RecipeId, number> {
+  const solution = new Map<RecipeId, number>();
+  const { involvedItemIds: itemIds } = detectedCycle;
+  const recipeIds = detectedCycle.cycleNodes
+    .map((n) => n.recipe?.id)
+    .filter(Boolean) as RecipeId[];
+
+  if (itemIds.length !== 2 || recipeIds.length !== 2) {
+    throw new Error(
+      `Complex cycles with ${itemIds.length} steps not yet supported`,
+    );
+  }
+
+  const [itemA, itemB] = itemIds;
+  const [recipeAId, recipeBId] = recipeIds;
+  const recipeA = getOrThrow(maps.recipeMap, recipeAId, "Recipe");
+  const recipeB = getOrThrow(maps.recipeMap, recipeBId, "Recipe");
+
+  const recipeForA = recipeA.outputs.some((o) => o.itemId === itemA)
+    ? recipeA
+    : recipeB;
+  const recipeForB = recipeA.outputs.some((o) => o.itemId === itemB)
+    ? recipeA
+    : recipeB;
+
+  const outputA = recipeForA.outputs.find((o) => o.itemId === itemA)!;
+  const outputB = recipeForB.outputs.find((o) => o.itemId === itemB)!;
+  const rateA = calcRate(outputA.amount, recipeForA.craftingTime);
+  const rateB = calcRate(outputB.amount, recipeForB.craftingTime);
+
+  const inputAinB = recipeForB.inputs.find((i) => i.itemId === itemA);
+  const inputBinA = recipeForA.inputs.find((i) => i.itemId === itemB);
+  const consumeA = inputAinB
+    ? calcRate(inputAinB.amount, recipeForB.craftingTime)
+    : 0;
+  const consumeB = inputBinA
+    ? calcRate(inputBinA.amount, recipeForA.craftingTime)
+    : 0;
+
+  const netA = targetItemId === itemA ? targetOutputRate : 0;
+  const netB = targetItemId === itemB ? targetOutputRate : 0;
+
+  const coeffA = rateA - (consumeB * consumeA) / rateB;
+  const rhsA = netA + (netB * consumeA) / rateB;
+
+  const countA = rhsA / coeffA;
+  const countB = (countA * consumeB + netB) / rateB;
+
+  solution.set(recipeForA.id, countA);
+  solution.set(recipeForB.id, countB);
+
+  return solution;
+}
+
+/** Builds dependency tree and detects cycles */
 function buildDependencyTree(
   targets: Array<{ itemId: ItemId; rate: number }>,
   maps: ProductionMaps,
   recipeOverrides?: Map<ItemId, RecipeId>,
   recipeSelector: RecipeSelector = defaultRecipeSelector,
   manualRawMaterials?: Set<ItemId>,
-): ProductionNode[] {
-  return targets.map((t) =>
-    calculateNode(
-      t.itemId,
-      t.rate,
-      maps,
-      recipeOverrides,
-      recipeSelector,
-      new Set(),
-      true,
-      manualRawMaterials,
-    ),
+): { rootNodes: ProductionNode[]; detectedCycles: DetectedCycle[] } {
+  const detectedCycles: DetectedCycle[] = [];
+
+  const calculateNode = (
+    itemId: ItemId,
+    requiredRate: number,
+    visitedPath: Set<ItemId>,
+    isDirectTarget: boolean,
+  ): ProductionNode => {
+    const item = getOrThrow(maps.itemMap, itemId, "Item");
+
+    // Check for cycle
+    if (visitedPath.has(itemId)) {
+      const pathArray = Array.from(visitedPath);
+      const cyclePath = pathArray.slice(pathArray.indexOf(itemId));
+      const cycleId = `cycle-${[...cyclePath].sort().join("-")}`;
+
+      // Check if cycle already detected
+      const isDuplicate = detectedCycles.some((c) => {
+        if (c.involvedItemIds.length !== cyclePath.length) return false;
+        const cycleSet = new Set(cyclePath);
+        return c.involvedItemIds.every((id) => cycleSet.has(id));
+      });
+
+      if (!isDuplicate) {
+        const cycleNodes = reconstructCycle(
+          cyclePath,
+          maps,
+          recipeOverrides,
+          recipeSelector,
+          manualRawMaterials,
+        );
+
+        detectedCycles.push({
+          cycleId,
+          involvedItemIds: cyclePath,
+          breakPointItemId: itemId,
+          cycleNodes,
+          netOutputs: calculateCycleNetOutputs(cycleNodes),
+        });
+      }
+
+      return {
+        item,
+        targetRate: requiredRate,
+        recipe: null,
+        facility: null,
+        facilityCount: 0,
+        isRawMaterial: false,
+        isTarget: false,
+        dependencies: [],
+        isCyclePlaceholder: true,
+        cycleItemId: itemId,
+        cycleId,
+      };
+    }
+
+    // Check if raw material
+    if (manualRawMaterials?.has(itemId)) {
+      return {
+        item,
+        targetRate: requiredRate,
+        recipe: null,
+        facility: null,
+        facilityCount: 0,
+        isRawMaterial: true,
+        isTarget: isDirectTarget,
+        dependencies: [],
+      };
+    }
+
+    const availableRecipes = Array.from(maps.recipeMap.values()).filter((r) =>
+      r.outputs.some((o) => o.itemId === itemId),
+    );
+
+    if (availableRecipes.length === 0) {
+      return {
+        item,
+        targetRate: requiredRate,
+        recipe: null,
+        facility: null,
+        facilityCount: 0,
+        isRawMaterial: true,
+        isTarget: isDirectTarget,
+        dependencies: [],
+      };
+    }
+
+    const newVisitedPath = new Set(visitedPath);
+    newVisitedPath.add(itemId);
+
+    const selectedRecipe = recipeOverrides?.has(itemId)
+      ? getOrThrow(
+          maps.recipeMap,
+          recipeOverrides.get(itemId)!,
+          "Override recipe",
+        )
+      : recipeSelector(availableRecipes, newVisitedPath);
+
+    const facility = getOrThrow(
+      maps.facilityMap,
+      selectedRecipe.facilityId,
+      "Facility",
+    );
+    const outputAmount =
+      selectedRecipe.outputs.find((o) => o.itemId === itemId)?.amount || 0;
+    const outputRatePerFacility = calcRate(
+      outputAmount,
+      selectedRecipe.craftingTime,
+    );
+    const facilityCount = requiredRate / outputRatePerFacility;
+    const cyclesPerMinute = 60 / selectedRecipe.craftingTime;
+
+    const dependencies = selectedRecipe.inputs.map((input) => {
+      const inputRate = input.amount * cyclesPerMinute * facilityCount;
+      return calculateNode(input.itemId, inputRate, newVisitedPath, false);
+    });
+
+    return {
+      item,
+      targetRate: requiredRate,
+      recipe: selectedRecipe,
+      facility,
+      facilityCount,
+      isRawMaterial: false,
+      isTarget: isDirectTarget,
+      dependencies,
+    };
+  };
+
+  const rootNodes = targets.map((t) =>
+    calculateNode(t.itemId, t.rate, new Set(), true),
   );
+
+  // Solve cycles and update facility counts
+  detectedCycles.forEach((cycle) => {
+    const cycleItemSet = new Set(cycle.involvedItemIds);
+    const externalConsumption = new Map<ItemId, number>();
+
+    const findExternalConsumption = (node: ProductionNode, inCycle = false) => {
+      if (node.isCyclePlaceholder) return;
+
+      const nodeIsInCycle =
+        cycleItemSet.has(node.item.id) && !node.isRawMaterial;
+
+      if (!nodeIsInCycle && !inCycle) {
+        node.dependencies.forEach((dep) => {
+          if (dep.isCyclePlaceholder) return;
+          if (cycleItemSet.has(dep.item.id) && !dep.isRawMaterial) {
+            externalConsumption.set(
+              dep.item.id,
+              (externalConsumption.get(dep.item.id) || 0) + dep.targetRate,
+            );
+          }
+        });
+      }
+
+      node.dependencies.forEach((dep) =>
+        findExternalConsumption(dep, nodeIsInCycle || inCycle),
+      );
+    };
+
+    rootNodes.forEach((node) => findExternalConsumption(node));
+
+    if (externalConsumption.size === 0) return;
+
+    // Find primary extraction point
+    let extractionItemId: ItemId | null = null;
+    let maxConsumption = 0;
+    for (const [itemId, rate] of externalConsumption) {
+      if (rate > maxConsumption) {
+        maxConsumption = rate;
+        extractionItemId = itemId;
+      }
+    }
+
+    if (!extractionItemId) return;
+
+    try {
+      const solution = solveCycleForOutput(
+        cycle,
+        extractionItemId,
+        maxConsumption,
+        maps,
+      );
+
+      const updateCycleNodes = (node: ProductionNode) => {
+        if (node.isCyclePlaceholder) {
+          node.dependencies.forEach(updateCycleNodes);
+          return;
+        }
+
+        if (node.recipe && solution.has(node.recipe.id)) {
+          const solvedCount = solution.get(node.recipe.id)!;
+          node.facilityCount = solvedCount;
+          node.isPartOfCycle = true;
+          node.cycleId = cycle.cycleId;
+
+          node.recipe.inputs.forEach((input, index) => {
+            if (node.dependencies[index]) {
+              node.dependencies[index].targetRate =
+                calcRate(input.amount, node.recipe!.craftingTime) * solvedCount;
+            }
+          });
+        }
+
+        node.dependencies.forEach(updateCycleNodes);
+      };
+
+      rootNodes.forEach(updateCycleNodes);
+    } catch (error) {
+      console.error(`Failed to solve cycle ${cycle.cycleId}:`, error);
+    }
+  });
+
+  return { rootNodes, detectedCycles };
 }
 
-/**
- * Processes the raw dependency trees to create a merged, sorted, and flattened production plan.
- */
-function processMergedPlan(
-  rootNodes: ProductionNode[],
-): Omit<UnifiedProductionPlan, "dependencyRootNodes"> {
-  // 1. Identify all items that are produced by any recipe within the entire production graph.
+/** Processes raw dependency trees into merged plan */
+function processMergedPlan(rootNodes: ProductionNode[]): Omit<
+  UnifiedProductionPlan,
+  "dependencyRootNodes"
+> & {
+  keyToLevel: Map<string, number>;
+} {
   const producedItemIds = collectProducedItems(rootNodes);
-
-  // 2. Merge duplicate production steps and aggregate requirements.
   const mergedNodes = mergeProductionNodes(rootNodes, producedItemIds);
-
-  // 3. Sort the merged nodes for a logical flow (producer -> consumer) and better display.
   const sortedKeys = topologicalSort(mergedNodes);
   const sortedByLevelAndTier = sortByLevelAndTier(sortedKeys, mergedNodes);
 
-  // 4. Build the final flat list and calculate statistics.
-  return buildFinalPlanComponents(sortedByLevelAndTier, mergedNodes);
+  return {
+    ...buildFinalPlanComponents(sortedByLevelAndTier, mergedNodes),
+    detectedCycles: [],
+  };
 }
 
 /**
  * Calculates a complete production plan for multiple target items at specified rates.
- * The output includes the raw dependency trees (for visualization) and the merged flat list (for statistics).
  */
 export function calculateProductionPlan(
   targets: Array<{ itemId: ItemId; rate: number }>,
@@ -528,31 +775,34 @@ export function calculateProductionPlan(
 ): UnifiedProductionPlan {
   if (targets.length === 0) throw new Error("No targets specified");
 
-  // Create lookup maps for efficient access to items, recipes, and facilities.
   const maps: ProductionMaps = {
     itemMap: new Map(items.map((i) => [i.id, i])),
     recipeMap: new Map(recipes.map((r) => [r.id, r])),
     facilityMap: new Map(facilities.map((f) => [f.id, f])),
   };
 
-  // 1. Build the raw, unmerged dependency tree(s).
-  const dependencyRootNodes = buildDependencyTree(
-    targets,
-    maps,
-    recipeOverrides,
-    recipeSelector,
-    manualRawMaterials,
-  );
+  const { rootNodes: dependencyRootNodes, detectedCycles } =
+    buildDependencyTree(
+      targets,
+      maps,
+      recipeOverrides,
+      recipeSelector,
+      manualRawMaterials,
+    );
 
-  // 2. Process the merged and flattened plan for statistics and tables.
-  const { flatList, totalPowerConsumption, rawMaterialRequirements } =
-    processMergedPlan(dependencyRootNodes);
+  const {
+    flatList,
+    totalPowerConsumption,
+    rawMaterialRequirements,
+    keyToLevel,
+  } = processMergedPlan(dependencyRootNodes);
 
-  // 3. Return the unified plan.
   return {
     dependencyRootNodes,
     flatList,
     totalPowerConsumption,
     rawMaterialRequirements,
+    detectedCycles,
+    keyToLevel,
   };
 }

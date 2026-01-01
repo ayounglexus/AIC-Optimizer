@@ -1,7 +1,7 @@
 import { Position, MarkerType } from "@xyflow/react";
 import type { Node, Edge } from "@xyflow/react";
-import type { Item, Facility, Recipe } from "@/types";
-import type { ProductionNode } from "@/lib/calculator";
+import type { Item, Facility, Recipe, ItemId } from "@/types";
+import type { DetectedCycle, ProductionNode } from "@/lib/calculator";
 import type {
   FlowProductionNode,
   FlowNodeDataSeparated,
@@ -17,6 +17,8 @@ import {
   type AggregatedProductionNodeData,
   findTargetsWithDownstream,
   shouldSkipNode,
+  createCycleInfo,
+  isCircularBreakpoint,
 } from "./flow-utils";
 
 /**
@@ -102,6 +104,7 @@ export function mapPlanToFlowSeparated(
   rootNodes: ProductionNode[],
   items: Item[],
   facilities: Facility[],
+  detectedCycles: DetectedCycle[] = [],
 ): { nodes: (FlowProductionNode | FlowTargetNode)[]; edges: Edge[] } {
   // Step 1: Collect unique nodes and determine processing order
   const nodeMap = aggregateProductionNodes(rootNodes);
@@ -110,18 +113,27 @@ export function mapPlanToFlowSeparated(
   // Identify which targets are upstream of other targets
   const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
 
-  // Step 2: Initialize capacity pool manager
+  // Create item map for cycle display name generation
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+
+  // Step 2: Initialize capacity pool manager (skip circular breakpoints)
   const poolManager = new CapacityPoolManager();
 
   sortedKeys.forEach((key) => {
     const aggregatedData = nodeMap.get(key)!;
+    const node = aggregatedData.node;
 
-    if (shouldSkipNode(aggregatedData.node, key, targetsWithDownstream)) {
+    if (shouldSkipNode(node, key, targetsWithDownstream)) {
+      return;
+    }
+
+    // Skip circular breakpoint nodes - they don't need pools
+    if (isCircularBreakpoint(node, detectedCycles)) {
       return;
     }
 
     const aggregatedNode: ProductionNode = {
-      ...aggregatedData.node,
+      ...node,
       targetRate: aggregatedData.totalRate,
       facilityCount: aggregatedData.totalFacilityCount,
     };
@@ -129,7 +141,7 @@ export function mapPlanToFlowSeparated(
     poolManager.createPool(aggregatedNode, key);
   });
 
-  // Step 3: Generate Flow nodes (skip terminal targets)
+  // Step 3: Generate Flow nodes (skip terminal targets and circular breakpoints)
   const flowNodes: Node<
     FlowNodeDataSeparated | FlowNodeDataSeparatedWithTarget
   >[] = [];
@@ -142,6 +154,11 @@ export function mapPlanToFlowSeparated(
       return;
     }
 
+    // Skip circular breakpoint nodes
+    if (isCircularBreakpoint(node, detectedCycles)) {
+      return;
+    }
+
     // Check if this node is a target with downstream
     const isDirectTarget = node.isTarget && targetsWithDownstream.has(key);
     const directTargetRate = isDirectTarget
@@ -149,43 +166,47 @@ export function mapPlanToFlowSeparated(
       : undefined;
 
     if (node.isRawMaterial) {
-      const isCircular = node.recipe !== null;
+      // Regular raw material node (not a circular breakpoint)
       const aggregatedNode: ProductionNode = {
         ...node,
         targetRate: aggregatedData.totalRate,
         facilityCount: aggregatedData.totalFacilityCount,
       };
 
+      const cycleInfo = createCycleInfo(node, detectedCycles, itemMap);
+
       flowNodes.push({
         id: makeNodeIdFromKey(key),
         type: "productionNode",
         data: {
           productionNode: aggregatedNode,
-          isCircular,
+          isCircular: false,
           items,
           facilities,
           isDirectTarget,
           directTargetRate,
+          cycleInfo,
         },
         position: { x: 0, y: 0 },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
       });
     } else {
+      // Production node - create individual facility instances
       const facilityInstances = poolManager.getFacilityInstances(key);
       const totalFacilities = facilityInstances.length;
 
       facilityInstances.forEach((facility) => {
         const isPartialLoad =
-          facility.actualOutputRate < facility.maxOutputRate * 0.999; // Small epsilon for floating point comparison
+          facility.actualOutputRate < facility.maxOutputRate * 0.999;
 
-        // Create a modified ProductionNode for this specific facility instance
-        // with targetRate set to this facility's actual output rate
         const facilitySpecificNode: ProductionNode = {
           ...node,
           targetRate: facility.actualOutputRate,
-          facilityCount: 1, // Each node represents exactly 1 facility
+          facilityCount: 1,
         };
+
+        const cycleInfo = createCycleInfo(node, detectedCycles, itemMap);
 
         flowNodes.push({
           id: facility.facilityId,
@@ -195,12 +216,12 @@ export function mapPlanToFlowSeparated(
             isCircular: false,
             items,
             facilities,
-            // Separated mode specific fields
             facilityIndex: facility.facilityIndex,
             totalFacilities,
             isPartialLoad,
             isDirectTarget,
             directTargetRate,
+            cycleInfo,
           },
           position: { x: 0, y: 0 },
           sourcePosition: Position.Right,
@@ -210,12 +231,10 @@ export function mapPlanToFlowSeparated(
     }
   });
 
-  // Step 4: Generate edges (skip terminal targets in consumption)
+  // Step 4: Generate edges (redirect circular dependencies)
   const edges: Edge[] = [];
   let edgeIdCounter = 0;
 
-  // Process nodes in reverse topological order (consumers before producers)
-  // This ensures we connect from producers to consumers
   const reverseOrder = [...sortedKeys].reverse();
 
   reverseOrder.forEach((consumerKey) => {
@@ -223,6 +242,11 @@ export function mapPlanToFlowSeparated(
     const consumerNode = consumerData.node;
 
     if (shouldSkipNode(consumerNode, consumerKey, targetsWithDownstream)) {
+      return;
+    }
+
+    // Skip if this is a circular breakpoint (no pool was created)
+    if (isCircularBreakpoint(consumerNode, detectedCycles)) {
       return;
     }
 
@@ -248,37 +272,53 @@ export function mapPlanToFlowSeparated(
           return;
         }
 
-        // Allocate capacity from producer pool
-        if (dependency.isRawMaterial) {
-          // Connect directly to the raw material node
-          const rawMaterialNodeId = makeNodeIdFromKey(depKey);
-          edges.push({
-            id: `e${edgeIdCounter++}`,
-            source: rawMaterialNodeId,
-            target: consumerId,
-            type: "default",
-            label: `${demandRate.toFixed(2)} /min`,
-            data: { flowRate: demandRate },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-            },
-          });
-        } else {
-          // Allocate from capacity pool
-          const allocations = poolManager.allocate(depKey, demandRate);
+        // Check if dependency is a circular breakpoint
+        const isBreakpoint = isCircularBreakpoint(dependency, detectedCycles);
 
-          allocations.forEach((allocation) => {
-            edges.push({
-              id: `e${edgeIdCounter++}`,
-              source: allocation.sourceNodeId,
-              target: consumerId,
-              type: "default",
-              label: `${allocation.allocatedAmount.toFixed(2)} /min`,
-              data: { flowRate: allocation.allocatedAmount },
-              markerEnd: {
-                type: MarkerType.ArrowClosed,
-              },
-            });
+        if (isBreakpoint) {
+          const productionKey = findProductionKeyForItem(
+            dependency.item.id,
+            nodeMap,
+          );
+
+          if (productionKey) {
+            poolManager
+              .allocate(productionKey, demandRate)
+              .forEach((allocation) => {
+                edges.push(
+                  createEdge(
+                    `e${edgeIdCounter++}`,
+                    allocation.sourceNodeId,
+                    consumerId,
+                    allocation.allocatedAmount,
+                    { isPartOfCycle: true },
+                  ),
+                );
+              });
+          } else {
+            console.warn(
+              `Production key not found for circular breakpoint: ${dependency.item.id}`,
+            );
+          }
+        } else if (dependency.isRawMaterial) {
+          edges.push(
+            createEdge(
+              `e${edgeIdCounter++}`,
+              `node-${depKey}`,
+              consumerId,
+              demandRate,
+            ),
+          );
+        } else {
+          poolManager.allocate(depKey, demandRate).forEach((allocation) => {
+            edges.push(
+              createEdge(
+                `e${edgeIdCounter++}`,
+                allocation.sourceNodeId,
+                consumerId,
+                allocation.allocatedAmount,
+              ),
+            );
           });
         }
       });
@@ -294,7 +334,6 @@ export function mapPlanToFlowSeparated(
     const targetNodeId = `target-sink-${data.node.item.id}`;
     const hasDownstream = targetsWithDownstream.has(productionKey);
 
-    // Prepare production info for terminal targets
     const productionInfo = !hasDownstream
       ? {
           facility: data.node.facility,
@@ -311,34 +350,30 @@ export function mapPlanToFlowSeparated(
         targetRate: data.totalRate,
         items,
         facilities,
-        productionInfo, // Pass production info for terminal targets
+        productionInfo,
       },
       position: { x: 0, y: 0 },
       targetPosition: Position.Left,
     });
 
     if (hasDownstream) {
-      // Target with downstream: allocate from its production pool
-      const allocations = poolManager.allocate(productionKey, data.totalRate);
-
-      allocations.forEach((allocation) => {
-        edges.push({
-          id: `e${edgeIdCounter++}`,
-          source: allocation.sourceNodeId,
-          target: targetNodeId,
-          type: "default",
-          label: `${allocation.allocatedAmount.toFixed(2)} /min`,
-          data: { flowRate: allocation.allocatedAmount },
-          animated: true,
-          style: { stroke: "#10b981", strokeWidth: 2 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: "#10b981",
-          },
+      poolManager
+        .allocate(productionKey, data.totalRate)
+        .forEach((allocation) => {
+          edges.push(
+            createEdge(
+              `e${edgeIdCounter++}`,
+              allocation.sourceNodeId,
+              targetNodeId,
+              allocation.allocatedAmount,
+              {
+                animated: true,
+                style: { stroke: "#10b981", strokeWidth: 2 },
+              },
+            ),
+          );
         });
-      });
     } else {
-      // Target without downstream: allocate directly from its dependencies
       const targetNode = data.node;
 
       targetNode.dependencies.forEach((dep) => {
@@ -356,46 +391,164 @@ export function mapPlanToFlowSeparated(
 
         if (demandRate === null) return;
 
-        if (dep.isRawMaterial) {
-          const rawMaterialNodeId = makeNodeIdFromKey(depKey);
-          edges.push({
-            id: `e${edgeIdCounter++}`,
-            source: rawMaterialNodeId,
-            target: targetNodeId,
-            type: "default",
-            label: `${demandRate.toFixed(2)} /min`,
-            data: { flowRate: demandRate },
-            animated: true,
-            style: { stroke: "#10b981", strokeWidth: 2 },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: "#10b981",
-            },
-          });
-        } else {
-          const allocations = poolManager.allocate(depKey, demandRate);
+        // Check if dependency is a circular breakpoint
+        const isBreakpoint = isCircularBreakpoint(dep, detectedCycles);
 
-          allocations.forEach((allocation) => {
-            edges.push({
-              id: `e${edgeIdCounter++}`,
-              source: allocation.sourceNodeId,
-              target: targetNodeId,
-              type: "default",
-              label: `${allocation.allocatedAmount.toFixed(2)} /min`,
-              data: { flowRate: allocation.allocatedAmount },
-              animated: true,
-              style: { stroke: "#10b981", strokeWidth: 2 },
-              markerEnd: {
-                type: MarkerType.ArrowClosed,
-                color: "#10b981",
+        if (isBreakpoint) {
+          const productionKey = findProductionKeyForItem(dep.item.id, nodeMap);
+
+          if (productionKey) {
+            poolManager
+              .allocate(productionKey, demandRate)
+              .forEach((allocation) => {
+                edges.push(
+                  createEdge(
+                    `e${edgeIdCounter++}`,
+                    allocation.sourceNodeId,
+                    targetNodeId,
+                    allocation.allocatedAmount,
+                    {
+                      isPartOfCycle: true,
+                      animated: true,
+                      style: { stroke: "#10b981", strokeWidth: 2 },
+                    },
+                  ),
+                );
+              });
+          }
+        } else if (dep.isRawMaterial) {
+          edges.push(
+            createEdge(
+              `e${edgeIdCounter++}`,
+              `node-${depKey}`,
+              targetNodeId,
+              demandRate,
+              {
+                animated: true,
+                style: { stroke: "#10b981", strokeWidth: 2 },
               },
-            });
+            ),
+          );
+        } else {
+          poolManager.allocate(depKey, demandRate).forEach((allocation) => {
+            edges.push(
+              createEdge(
+                `e${edgeIdCounter++}`,
+                allocation.sourceNodeId,
+                targetNodeId,
+                allocation.allocatedAmount,
+                {
+                  animated: true,
+                  style: { stroke: "#10b981", strokeWidth: 2 },
+                },
+              ),
+            );
           });
         }
       });
     }
   });
 
+  // Step 6: Add cycle closure edges to visualize loops
+  detectedCycles.forEach((cycle) => {
+    const breakPointItemId = cycle.breakPointItemId;
+    if (cycle.involvedItemIds.length < 2) return;
+
+    const breakPointIndex = cycle.involvedItemIds.indexOf(breakPointItemId);
+    const consumerIndex = (breakPointIndex + 1) % cycle.involvedItemIds.length;
+    const consumerItemId = cycle.involvedItemIds[consumerIndex];
+
+    const breakPointProductionKey = findProductionKeyForItem(
+      breakPointItemId,
+      nodeMap,
+    );
+    const consumerProductionKey = findProductionKeyForItem(
+      consumerItemId,
+      nodeMap,
+    );
+
+    if (!breakPointProductionKey || !consumerProductionKey) {
+      console.warn(
+        `Cannot create cycle closure: missing keys for ${breakPointItemId} or ${consumerItemId}`,
+      );
+      return;
+    }
+
+    const breakPointFacilities = poolManager.getFacilityInstances(
+      breakPointProductionKey,
+    );
+    const consumerFacilities = poolManager.getFacilityInstances(
+      consumerProductionKey,
+    );
+
+    if (breakPointFacilities.length === 0 || consumerFacilities.length === 0)
+      return;
+
+    const consumerNode = nodeMap.get(consumerProductionKey)?.node;
+    if (!consumerNode?.recipe) return;
+
+    const breakPointInput = consumerNode.recipe.inputs.find(
+      (i) => i.itemId === breakPointItemId,
+    );
+    const consumerOutput = consumerNode.recipe.outputs.find(
+      (o) => o.itemId === consumerItemId,
+    );
+    if (!breakPointInput || !consumerOutput) return;
+
+    const totalConsumerRate = consumerFacilities.reduce(
+      (sum, f) => sum + f.actualOutputRate,
+      0,
+    );
+    const totalFlowRate =
+      (breakPointInput.amount / consumerOutput.amount) * totalConsumerRate;
+
+    let remainingFlow = totalFlowRate;
+    let consumerIdx = 0;
+
+    breakPointFacilities.forEach((breakPointFacility, idx) => {
+      if (remainingFlow <= 0.001) return;
+
+      const facilityCapacity = breakPointFacility.actualOutputRate;
+      const flowFromThisFacility = Math.min(facilityCapacity, remainingFlow);
+
+      const targetConsumer =
+        consumerFacilities[consumerIdx % consumerFacilities.length];
+
+      edges.push(
+        createEdge(
+          `cycle-closure-${cycle.cycleId}-${idx}`,
+          breakPointFacility.facilityId,
+          targetConsumer.facilityId,
+          flowFromThisFacility,
+          {
+            isCycleClosure: true,
+            animated: true,
+            style: {
+              stroke: "#a855f7",
+              strokeWidth: 2.5,
+              strokeDasharray: "5,5",
+            },
+            labelStyle: {
+              fill: "#a855f7",
+              fontWeight: 600,
+            },
+            labelBgStyle: {
+              fill: "#faf5ff",
+            },
+          },
+        ),
+      );
+
+      remainingFlow -= flowFromThisFacility;
+      consumerIdx++;
+    });
+
+    if (remainingFlow > 0.001) {
+      console.warn(
+        `Cycle closure incomplete: ${remainingFlow.toFixed(2)} /min remaining`,
+      );
+    }
+  });
   const styledEdges = applyEdgeStyling(edges);
 
   return {
@@ -421,4 +574,55 @@ function calculateDemandRate(
   }
 
   return (input.amount / output.amount) * outputRate;
+}
+
+function findProductionKeyForItem(
+  itemId: ItemId,
+  nodeMap: Map<string, AggregatedProductionNodeData>,
+): string | null {
+  for (const [key, data] of nodeMap.entries()) {
+    const node = data.node;
+    if (!node.isRawMaterial && node.item.id === itemId && node.recipe) {
+      return key;
+    }
+  }
+  return null;
+}
+
+function createEdge(
+  id: string,
+  source: string,
+  target: string,
+  flowRate: number,
+  options: {
+    isPartOfCycle?: boolean;
+    isCycleClosure?: boolean;
+    animated?: boolean;
+    style?: React.CSSProperties;
+    labelStyle?: React.CSSProperties;
+    labelBgStyle?: React.CSSProperties;
+  } = {},
+): Edge {
+  return {
+    id,
+    source,
+    target,
+    type: "default",
+    label: options.isCycleClosure
+      ? `🔄 ${flowRate.toFixed(2)} /min`
+      : `${flowRate.toFixed(2)} /min`,
+    data: {
+      flowRate,
+      isPartOfCycle: options.isPartOfCycle,
+      isCycleClosure: options.isCycleClosure,
+    },
+    animated: options.animated,
+    style: options.style,
+    labelStyle: options.labelStyle,
+    labelBgStyle: options.labelBgStyle,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: options.style?.stroke as string,
+    },
+  };
 }

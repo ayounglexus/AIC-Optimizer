@@ -1,4 +1,7 @@
-import type { ProductionNode } from "@/lib/calculator";
+import type { ItemId } from "@/types";
+import type { DetectedCycle, ProductionNode } from "@/lib/calculator";
+import type { CycleInfo } from "./types";
+import { getItemName } from "@/lib/i18n-helpers";
 
 /**
  * Creates a stable key for a ProductionNode.
@@ -44,6 +47,13 @@ export function aggregateProductionNodes(
   const nodeMap = new Map<string, AggregatedProductionNodeData>();
 
   const collect = (node: ProductionNode) => {
+    // Skip cycle placeholders - they don't represent actual production
+    if (node.isCyclePlaceholder) {
+      // Still traverse their dependencies (though they should have none)
+      node.dependencies.forEach(collect);
+      return;
+    }
+
     const key = createFlowNodeKey(node);
     const existing = nodeMap.get(key);
 
@@ -144,4 +154,63 @@ export function shouldSkipNode(
   targetsWithDownstream: Set<string>,
 ): boolean {
   return node.isTarget && !targetsWithDownstream.has(nodeKey);
+}
+
+/**
+ * Creates cycle information for a production node.
+ *
+ * @param node The production node to check
+ * @param detectedCycles Array of all detected cycles
+ * @param itemMap Map for generating display names
+ * @returns CycleInfo if the node is in a cycle, undefined otherwise
+ */
+export function createCycleInfo(
+  node: ProductionNode,
+  detectedCycles: DetectedCycle[],
+  itemMap: Map<ItemId, import("@/types").Item>,
+): CycleInfo | undefined {
+  const cycle = detectedCycles.find((c) =>
+    c.involvedItemIds.includes(node.item.id),
+  );
+
+  if (!cycle) return undefined;
+
+  // Generate display name inline
+  const maxItems = 3;
+  const displayItems = cycle.involvedItemIds
+    .slice(0, maxItems)
+    .map((itemId) => {
+      const item = itemMap.get(itemId);
+      return item ? getItemName(item) : itemId;
+    });
+  const cycleDisplayName =
+    displayItems.join("-") +
+    (cycle.involvedItemIds.length > maxItems ? "... Cycle" : " Cycle");
+
+  return {
+    isPartOfCycle: true,
+    isBreakPoint: cycle.breakPointItemId === node.item.id,
+    cycleId: cycle.cycleId,
+    cycleDisplayName,
+  };
+}
+
+/**
+ * Checks if a node is a circular breakpoint (a raw material node that's actually produced in a cycle).
+ *
+ * @param node The production node to check
+ * @param detectedCycles All detected cycles
+ * @returns True if this node is a breakpoint in any cycle
+ */
+export function isCircularBreakpoint(
+  node: ProductionNode,
+  detectedCycles: DetectedCycle[],
+): boolean {
+  if (!node.isRawMaterial) {
+    return false;
+  }
+
+  return detectedCycles.some(
+    (cycle) => cycle.breakPointItemId === node.item.id,
+  );
 }

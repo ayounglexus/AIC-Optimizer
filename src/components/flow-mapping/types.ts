@@ -18,6 +18,8 @@ export interface FlowNodeData {
   isCircular: boolean;
   items: Item[];
   facilities: Facility[];
+  cycleInfo?: CycleInfo;
+  level?: number;
   [key: string]: unknown;
 }
 
@@ -32,6 +34,8 @@ export interface FlowNodeDataSeparated extends FlowNodeData {
   totalFacilities?: number;
   /** Whether this facility is operating at partial capacity (less than 100%) */
   isPartialLoad?: boolean;
+  /** Cycle information if this node participates in a production cycle */
+  cycleInfo?: CycleInfo;
 }
 
 /**
@@ -142,3 +146,24 @@ export type FlowProductionNode =
   | Node<FlowNodeDataSeparated>
   | Node<FlowNodeDataWithTarget>
   | Node<FlowNodeDataSeparatedWithTarget>;
+
+/**
+ * Information about a production cycle that a node participates in.
+ */
+export interface CycleInfo {
+  /** Whether this node is part of a production cycle */
+  isPartOfCycle: boolean;
+  /** Whether this node is the break point where the cycle was interrupted */
+  isBreakPoint: boolean;
+  /** Unique identifier of the cycle this node belongs to */
+  cycleId: string;
+  /** Display name for the cycle (e.g., "Seed-Plant Cycle") */
+  cycleDisplayName?: string;
+}
+
+declare module "@xyflow/react" {
+  interface EdgeData {
+    flowRate?: number;
+    isPartOfCycle?: boolean;
+  }
+}
