@@ -192,6 +192,7 @@ export function createEdge(
  * - Forward edges (source left of target in LR layout): use smoothstep for clean routing
  * - Backward edges (target left of source): use custom backward edge to avoid node overlap
  * - All edges get width proportional to flow rate
+ * - All edges get color based on normalized flow rate (heat map: blue→green→red)
  *
  * @param edges Array of edges to style
  * @param nodes Array of nodes with layouted positions
@@ -226,9 +227,14 @@ export function applyEdgeStyling(
 
     const flowRate = data.flowRate;
 
-    // Calculate stroke width based on flow rate (1-4 range)
+    // Calculate normalized rate (0-1)
     const normalizedRate = flowRate / maxFlowRate;
+
+    // Calculate stroke width based on flow rate (1-4 range)
     const strokeWidth = 1 + normalizedRate * 3;
+
+    // Calculate color based on normalized flow rate
+    const strokeColor = getFlowRateColor(normalizedRate);
 
     // Determine edge type based on direction (for LR layout)
     const sourceX = nodePositions.get(edge.source);
@@ -244,18 +250,18 @@ export function applyEdgeStyling(
 
     const edgeType = isBackwardEdge ? "backwardEdge" : "simplebezier";
 
-    // Unified gray styling for all edges
+    // Apply heat map color styling
     return {
       ...edge,
       type: edgeType,
       style: {
         strokeWidth,
-        stroke: "#64748b",
+        stroke: strokeColor,
         strokeLinecap: "round" as const,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: "#64748b",
+        color: strokeColor,
       },
       // Add label background for better readability
       labelBgPadding: [8, 4] as [number, number],
@@ -269,4 +275,50 @@ export function applyEdgeStyling(
       },
     };
   });
+}
+
+/**
+ * Interpolates between two RGB colors based on a factor (0-1).
+ */
+function interpolateColor(
+  color1: string,
+  color2: string,
+  factor: number,
+): string {
+  const hex1 = color1.replace("#", "");
+  const hex2 = color2.replace("#", "");
+
+  const r1 = parseInt(hex1.substring(0, 2), 16);
+  const g1 = parseInt(hex1.substring(2, 4), 16);
+  const b1 = parseInt(hex1.substring(4, 6), 16);
+
+  const r2 = parseInt(hex2.substring(0, 2), 16);
+  const g2 = parseInt(hex2.substring(2, 4), 16);
+  const b2 = parseInt(hex2.substring(4, 6), 16);
+
+  const r = Math.round(r1 + (r2 - r1) * factor);
+  const g = Math.round(g1 + (g2 - g1) * factor);
+  const b = Math.round(b1 + (b2 - b1) * factor);
+
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+/**
+ * Maps a normalized flow rate (0-1) to a color on the heat map gradient.
+ * 0.0 → Blue (cold, low flow)
+ * 0.5 → Green (medium flow)
+ * 1.0 → Red (hot, high flow)
+ */
+function getFlowRateColor(normalizedRate: number): string {
+  const blue = "#3b82f6";
+  const green = "#10b981";
+  const red = "#ef4444";
+
+  if (normalizedRate <= 0.5) {
+    // Interpolate between blue and green
+    return interpolateColor(blue, green, normalizedRate * 2);
+  } else {
+    // Interpolate between green and red
+    return interpolateColor(green, red, (normalizedRate - 0.5) * 2);
+  }
 }
