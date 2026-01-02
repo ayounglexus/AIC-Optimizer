@@ -12,7 +12,6 @@ import {
   type AggregatedProductionNodeData,
   findTargetsWithDownstream,
   shouldSkipNode,
-  createCycleInfo,
   isCircularBreakpoint,
   createEdge,
 } from "./flow-utils";
@@ -71,7 +70,6 @@ export function mapPlanToFlowSeparated(
   const nodeMap = aggregateProductionNodes(rootNodes);
   const sortedKeys = topologicalSortNodes(nodeMap);
   const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
-  const itemMap = new Map(items.map((item) => [item.id, item]));
 
   // Initialize capacity pools
   const poolManager = new CapacityPoolManager();
@@ -116,8 +114,6 @@ export function mapPlanToFlowSeparated(
           },
           items,
           facilities,
-          detectedCycles,
-          itemMap,
           undefined,
           undefined,
           undefined,
@@ -137,8 +133,6 @@ export function mapPlanToFlowSeparated(
             },
             items,
             facilities,
-            detectedCycles,
-            itemMap,
             facility.facilityIndex,
             poolManager.getFacilityInstances(key).length,
             facility.actualOutputRate < facility.maxOutputRate * 0.999,
@@ -460,8 +454,6 @@ function createProductionFlowNode(
   node: ProductionNode,
   items: Item[],
   facilities: Facility[],
-  detectedCycles: DetectedCycle[],
-  itemMap: Map<ItemId, Item>,
   facilityIndex?: number,
   totalFacilities?: number,
   isPartialLoad?: boolean,
@@ -481,7 +473,6 @@ function createProductionFlowNode(
       isPartialLoad,
       isDirectTarget,
       directTargetRate,
-      cycleInfo: createCycleInfo(node, detectedCycles, itemMap),
     },
     position: { x: 0, y: 0 },
     sourcePosition: Position.Right,

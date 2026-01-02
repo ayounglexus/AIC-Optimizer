@@ -69,12 +69,7 @@ export default function ProductionDependencyTree({
             facilities,
             plan.detectedCycles,
           )
-        : mapPlanToFlowMerged(
-            plan.dependencyRootNodes,
-            items,
-            facilities,
-            plan.detectedCycles,
-          );
+        : mapPlanToFlowMerged(plan.dependencyRootNodes, items, facilities);
 
     // Apply layout algorithm to position nodes
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(

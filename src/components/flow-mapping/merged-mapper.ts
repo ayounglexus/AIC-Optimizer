@@ -1,14 +1,13 @@
 import { Position } from "@xyflow/react";
 import type { Node, Edge } from "@xyflow/react";
 import type { Item, Facility } from "@/types";
-import type { ProductionNode, DetectedCycle } from "@/lib/calculator";
+import type { ProductionNode } from "@/lib/calculator";
 import type { FlowNodeData, FlowProductionNode, FlowTargetNode } from "./types";
 import { applyEdgeStyling } from "./flow-utils";
 import {
   createFlowNodeKey,
   aggregateProductionNodes,
   findTargetsWithDownstream,
-  createCycleInfo,
   createEdge,
 } from "./flow-utils";
 
@@ -29,7 +28,6 @@ export function mapPlanToFlowMerged(
   rootNodes: ProductionNode[],
   items: Item[],
   facilities: Facility[],
-  detectedCycles: DetectedCycle[] = [],
   keyToLevel?: Map<string, number>,
 ): { nodes: (FlowProductionNode | FlowTargetNode)[]; edges: Edge[] } {
   const nodes: Node<FlowNodeData>[] = [];
@@ -38,7 +36,6 @@ export function mapPlanToFlowMerged(
   const targetSinkNodes: Node<import("./types").TargetSinkNodeData>[] = [];
 
   const aggregatedNodes = aggregateProductionNodes(rootNodes);
-  const itemMap = new Map(items.map((item) => [item.id, item]));
   const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
 
   const getOrCreateNodeId = (node: ProductionNode): string => {
@@ -118,11 +115,6 @@ export function mapPlanToFlowMerged(
           directTargetRate: isDirectTarget
             ? aggregatedData.totalRate
             : undefined,
-          cycleInfo: createCycleInfo(
-            aggregatedData.node,
-            detectedCycles,
-            itemMap,
-          ),
           level: getNodeLevel(aggregatedData.node, key),
         },
         position: { x: 0, y: 0 },

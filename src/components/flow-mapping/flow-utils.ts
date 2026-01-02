@@ -1,7 +1,4 @@
-import type { ItemId } from "@/types";
 import type { DetectedCycle, ProductionNode } from "@/lib/calculator";
-import type { CycleInfo } from "./types";
-import { getItemName } from "@/lib/i18n-helpers";
 import { MarkerType, type Edge } from "@xyflow/react";
 
 /**
@@ -155,45 +152,6 @@ export function shouldSkipNode(
   targetsWithDownstream: Set<string>,
 ): boolean {
   return node.isTarget && !targetsWithDownstream.has(nodeKey);
-}
-
-/**
- * Creates cycle information for a production node.
- *
- * @param node The production node to check
- * @param detectedCycles Array of all detected cycles
- * @param itemMap Map for generating display names
- * @returns CycleInfo if the node is in a cycle, undefined otherwise
- */
-export function createCycleInfo(
-  node: ProductionNode,
-  detectedCycles: DetectedCycle[],
-  itemMap: Map<ItemId, import("@/types").Item>,
-): CycleInfo | undefined {
-  const cycle = detectedCycles.find((c) =>
-    c.involvedItemIds.includes(node.item.id),
-  );
-
-  if (!cycle) return undefined;
-
-  // Generate display name inline
-  const maxItems = 3;
-  const displayItems = cycle.involvedItemIds
-    .slice(0, maxItems)
-    .map((itemId) => {
-      const item = itemMap.get(itemId);
-      return item ? getItemName(item) : itemId;
-    });
-  const cycleDisplayName =
-    displayItems.join("-") +
-    (cycle.involvedItemIds.length > maxItems ? "... Cycle" : " Cycle");
-
-  return {
-    isPartOfCycle: true,
-    isBreakPoint: cycle.breakPointItemId === node.item.id,
-    cycleId: cycle.cycleId,
-    cycleDisplayName,
-  };
 }
 
 /**

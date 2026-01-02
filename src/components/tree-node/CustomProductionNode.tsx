@@ -67,7 +67,7 @@ function hasTargetInfo(
 export default function CustomProductionNode({
   data,
 }: NodeProps<FlowProductionNode>) {
-  const { productionNode: node, isCircular, items, cycleInfo } = data;
+  const { productionNode: node, isCircular, items } = data;
   const { t } = useTranslation("production");
 
   /**
@@ -89,12 +89,7 @@ export default function CustomProductionNode({
 
   // Adjust border colors based on node type for better visual distinction
   let borderColor = "border-gray-300 dark:border-gray-600";
-  // Cycle nodes get purple border
-  if (cycleInfo?.isPartOfCycle) {
-    borderColor = cycleInfo.isBreakPoint
-      ? "border-purple-500 border-dashed" // Dashed for break point
-      : "border-purple-400"; // Solid for other cycle members
-  } else if (!node.isRawMaterial && node.recipe) {
+  if (!node.isRawMaterial && node.recipe) {
     // Regular production nodes get blue border
     borderColor = "border-blue-600 dark:border-blue-400";
   } else if (node.isRawMaterial) {
@@ -110,29 +105,11 @@ export default function CustomProductionNode({
       </div>
       {node.isRawMaterial ? (
         <div>
-          {cycleInfo?.isPartOfCycle ? (
-            <div>
-              <p className="text-purple-600 dark:text-purple-400 font-medium mb-1">
-                🔄 {t("tree.partOfCycle")}
-              </p>
-              <p className="text-muted-foreground text-xs">
-                {cycleInfo.isBreakPoint
-                  ? t("tree.cycleBreakPointDesc")
-                  : t("tree.cycleMemberDesc")}
-              </p>
-              {cycleInfo.cycleDisplayName && (
-                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                  {cycleInfo.cycleDisplayName}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">
-              {isCircular
-                ? t("tree.circularRawMaterial")
-                : t("tree.trueRawMaterial")}
-            </p>
-          )}
+          <p className="text-muted-foreground">
+            {isCircular
+              ? t("tree.circularRawMaterial")
+              : t("tree.trueRawMaterial")}
+          </p>
         </div>
       ) : node.recipe ? (
         <>
@@ -235,7 +212,7 @@ export default function CustomProductionNode({
                   </span>
                 )}
               </span>
-              {/* Target badge for nodes that are also direct targets */}
+              {/* Target badge */}
               {isTarget && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -251,6 +228,7 @@ export default function CustomProductionNode({
                 </Tooltip>
               )}
             </div>
+
             {/* Production/Requirement rate */}
             <div className="flex items-center justify-between mb-2 bg-muted/50 rounded px-2 py-1">
               <span className="text-muted-foreground text-[10px]">
@@ -260,7 +238,8 @@ export default function CustomProductionNode({
                 {formatNumber(node.targetRate)} /min
               </span>
             </div>
-            {/* Facility details for non-raw material nodes */}
+
+            {/* Facility details */}
             {!node.isRawMaterial && facility && (
               <div className={facilityBlockClasses}>
                 <div className="flex items-center gap-1.5">
@@ -279,10 +258,8 @@ export default function CustomProductionNode({
                 </div>
                 <span className="font-mono font-semibold text-blue-700 dark:text-blue-300">
                   {isSeparated
-                    ? // Separated mode: show facility index out of total
-                      `${data.facilityIndex! + 1}/${data.totalFacilities}`
-                    : // Merged mode: show facility count
-                      `×${formatNumber(node.facilityCount, 1)}`}
+                    ? `${data.facilityIndex! + 1}/${data.totalFacilities}`
+                    : `×${formatNumber(node.facilityCount, 1)}`}
                 </span>
               </div>
             )}
@@ -292,31 +269,8 @@ export default function CustomProductionNode({
                 ⚡ {t("tree.partialLoad")}
               </div>
             )}
-            {/* Cycle indicator - replaces the old circular warning */}
-            {cycleInfo?.isPartOfCycle && (
-              <div className="mt-2 bg-purple-100/70 dark:bg-purple-900/50 rounded px-2 py-1">
-                <div className="flex items-center justify-center gap-1 text-purple-700 dark:text-purple-300 text-[10px] font-medium">
-                  <span>🔄</span>
-                  <span>
-                    {cycleInfo.isBreakPoint
-                      ? t("tree.cycleBreakPoint")
-                      : t("tree.cycleMember")}
-                  </span>
-                </div>
-                {cycleInfo.cycleDisplayName && (
-                  <div className="text-center text-[9px] text-purple-600 dark:text-purple-400 mt-0.5">
-                    {cycleInfo.cycleDisplayName}
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Keep old circular warning only for non-cycle circular dependencies (if any) */}
-            {isCircular && !cycleInfo?.isPartOfCycle && (
-              <div className={circularWarningClasses}>
-                ⚠️ {t("tree.circularWarning")}
-              </div>
-            )}
-            {/* Circular dependency warning */}
+
+            {/* Circular dependency warning - keep only for true circular deps */}
             {isCircular && (
               <div className={circularWarningClasses}>
                 ⚠️ {t("tree.circularWarning")}
