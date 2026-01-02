@@ -23,6 +23,7 @@ import { getLayoutedElements } from "@/lib/layout";
 import { mapPlanToFlowMerged } from "./flow-mapping/merged-mapper";
 import { mapPlanToFlowSeparated } from "./flow-mapping/separated-mapper";
 import { applyEdgeStyling } from "./flow-mapping/flow-utils";
+import CustomBackwardEdge from "./tree-node/CustomBackwardEdge";
 
 /**
  * Props for the ProductionDependencyTree component.
@@ -108,6 +109,14 @@ export default function ProductionDependencyTree({
     [],
   );
 
+  // Define custom edge types for React Flow
+  const edgeTypes = useMemo(
+    () => ({
+      backwardEdge: CustomBackwardEdge,
+    }),
+    [],
+  );
+
   // Display a message if no production plan is available
   if (!plan || plan.dependencyRootNodes.length === 0) {
     return (
@@ -126,6 +135,7 @@ export default function ProductionDependencyTree({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           fitViewOptions={{
             padding: 0.2,

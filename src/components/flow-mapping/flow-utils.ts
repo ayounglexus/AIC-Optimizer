@@ -210,7 +210,7 @@ export function createEdge(
  * Should be called AFTER layout is applied, when nodes have actual positions.
  *
  * - Forward edges (source left of target in LR layout): use smoothstep for clean routing
- * - Backward edges (target left of source): use simplebezier with offset to avoid node overlap
+ * - Backward edges (target left of source): use custom backward edge to avoid node overlap
  * - All edges get width proportional to flow rate
  *
  * @param edges Array of edges to style
@@ -228,14 +228,12 @@ export function applyEdgeStyling(
 
   // Find max flow rate for normalization
   const flowRates: number[] = [];
-
   edges.forEach((e) => {
     const data = e.data as { flowRate?: number } | undefined;
     if (data?.flowRate !== undefined) {
       flowRates.push(data.flowRate);
     }
   });
-
   const maxFlowRate = Math.max(...flowRates, 1);
 
   return edges.map((edge) => {
@@ -264,8 +262,7 @@ export function applyEdgeStyling(
       targetX !== 0 &&
       targetX < sourceX - 10; // Add threshold to avoid false positives
 
-    // Use bezier curves for backward edges to create smooth loops and avoid crossings
-    const edgeType = isBackwardEdge ? "simplebezier" : "smoothstep";
+    const edgeType = isBackwardEdge ? "backwardEdge" : "simplebezier";
 
     // Unified gray styling for all edges
     return {
@@ -286,6 +283,9 @@ export function applyEdgeStyling(
       labelBgStyle: {
         fill: "#ffffff",
         fillOpacity: 0.9,
+      },
+      labelStyle: {
+        fontSize: 12,
       },
     };
   });
