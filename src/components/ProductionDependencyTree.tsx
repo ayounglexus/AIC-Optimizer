@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { getLayoutedElements } from "@/lib/layout";
 import { mapPlanToFlowMerged } from "./flow-mapping/merged-mapper";
 import { mapPlanToFlowSeparated } from "./flow-mapping/separated-mapper";
+import { applyEdgeStyling } from "./flow-mapping/flow-utils";
 
 /**
  * Props for the ProductionDependencyTree component.
@@ -42,7 +43,7 @@ type ProductionDependencyTreeProps = {
  * - Separated: Shows each individual facility as a separate node for detailed planning
  *
  * The component automatically layouts nodes using the Dagre algorithm and applies
- * dynamic styling to edges based on material flow rates.
+ * dynamic styling to edges based on material flow rates and geometry.
  *
  * @param {ProductionDependencyTreeProps} props The component props
  * @returns A React Flow component displaying the production dependency tree
@@ -78,9 +79,12 @@ export default function ProductionDependencyTree({
       "LR", // Left-to-right layout
     );
 
+    // Apply edge styling AFTER layout, when nodes have actual positions
+    const styledEdges = applyEdgeStyling(layoutedEdges, layoutedNodes);
+
     return {
       initialNodes: layoutedNodes as FlowProductionNode[],
-      initialEdges: layoutedEdges,
+      initialEdges: styledEdges,
     };
   }, [plan, items, facilities, visualizationMode]);
 

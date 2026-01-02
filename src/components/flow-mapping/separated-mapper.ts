@@ -4,7 +4,6 @@ import type { Item, Facility, ItemId } from "@/types";
 import type { DetectedCycle, ProductionNode } from "@/lib/calculator";
 import type { FlowProductionNode, FlowTargetNode } from "./types";
 import { CapacityPoolManager } from "./capacity-pool";
-import { applyEdgeStyling } from "./flow-utils";
 import {
   createFlowNodeKey,
   aggregateProductionNodes,
@@ -353,7 +352,7 @@ export function mapPlanToFlowSeparated(
 
   return {
     nodes: [...flowNodes, ...targetSinkNodes],
-    edges: applyEdgeStyling(edges),
+    edges: edges,
   };
 }
 

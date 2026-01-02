@@ -3,7 +3,6 @@ import type { Node, Edge } from "@xyflow/react";
 import type { Item, Facility } from "@/types";
 import type { ProductionNode } from "@/lib/calculator";
 import type { FlowNodeData, FlowProductionNode, FlowTargetNode } from "./types";
-import { applyEdgeStyling } from "./flow-utils";
 import {
   createFlowNodeKey,
   aggregateProductionNodes,
@@ -204,7 +203,7 @@ export function mapPlanToFlowMerged(
       | FlowProductionNode
       | FlowTargetNode
     )[],
-    edges: applyEdgeStyling(edges),
+    edges: edges,
   };
 }
 

@@ -175,8 +175,8 @@ export function isCircularBreakpoint(
 }
 
 /**
- * Creates a standardized edge for React Flow with unified styling.
- * All edges use gray color with width based on flow rate.
+ * Creates a standardized edge for React Flow.
+ * Edge type and styling will be determined automatically by applyEdgeStyling based on geometry.
  *
  * @param id Unique edge identifier
  * @param source Source node ID
@@ -193,7 +193,7 @@ export function createEdge(
     id,
     source,
     target,
-    type: "default",
+    type: "default", // Temporary type, will be set by applyEdgeStyling based on direction
     label: `${flowRate.toFixed(2)} /min`,
     data: {
       flowRate,
@@ -206,15 +206,25 @@ export function createEdge(
 }
 
 /**
- * Applies dynamic styling to edges based on their flow rates.
+ * Applies dynamic styling to edges and automatically selects edge type based on geometry.
+ * Should be called AFTER layout is applied, when nodes have actual positions.
  *
- * All edges use consistent gray styling with width proportional to flow rate.
+ * - Forward edges (source left of target in LR layout): use smoothstep for clean routing
+ * - Backward edges (target left of source): use simplebezier with offset to avoid node overlap
+ * - All edges get width proportional to flow rate
  *
  * @param edges Array of edges to style
- * @returns The same edges array with style properties applied
+ * @param nodes Array of nodes with layouted positions
+ * @returns The same edges array with style and type properties applied
  */
-export function applyEdgeStyling(edges: Edge[]): Edge[] {
+export function applyEdgeStyling(
+  edges: Edge[],
+  nodes: Array<{ id: string; position: { x: number; y: number } }>,
+): Edge[] {
   if (edges.length === 0) return edges;
+
+  // Build node position map for quick lookup
+  const nodePositions = new Map(nodes.map((n) => [n.id, n.position.x]));
 
   // Find max flow rate for normalization
   const flowRates: number[] = [];
@@ -242,16 +252,40 @@ export function applyEdgeStyling(edges: Edge[]): Edge[] {
     const normalizedRate = flowRate / maxFlowRate;
     const strokeWidth = 1 + normalizedRate * 3;
 
+    // Determine edge type based on direction (for LR layout)
+    const sourceX = nodePositions.get(edge.source);
+    const targetX = nodePositions.get(edge.target);
+
+    // Only check direction if both positions are available and non-zero
+    const isBackwardEdge =
+      sourceX !== undefined &&
+      targetX !== undefined &&
+      sourceX !== 0 &&
+      targetX !== 0 &&
+      targetX < sourceX - 10; // Add threshold to avoid false positives
+
+    // Use bezier curves for backward edges to create smooth loops and avoid crossings
+    const edgeType = isBackwardEdge ? "simplebezier" : "smoothstep";
+
     // Unified gray styling for all edges
     return {
       ...edge,
+      type: edgeType,
       style: {
         strokeWidth,
         stroke: "#64748b",
+        strokeLinecap: "round" as const,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: "#64748b",
+      },
+      // Add label background for better readability
+      labelBgPadding: [8, 4] as [number, number],
+      labelBgBorderRadius: 4,
+      labelBgStyle: {
+        fill: "#ffffff",
+        fillOpacity: 0.9,
       },
     };
   });
