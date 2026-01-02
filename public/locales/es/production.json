@@ -5,8 +5,6 @@
     "time": "Tiempo"
   },
   "table": {
-    "alreadyRawMaterial": "Ya es una materia prima",
-    "cannotMarkTarget": "Los artículos objetivo no pueden marcarse como materias primas",
     "headers": {
       "count": "Cantidad",
       "facility": "Instalación",

@@ -5,8 +5,6 @@
     "time": "시간"
   },
   "table": {
-    "alreadyRawMaterial": "이미 원자재입니다",
-    "cannotMarkTarget": "목표 아이템은 원자재로 표시할 수 없습니다",
     "headers": {
       "count": "수량",
       "facility": "시설",

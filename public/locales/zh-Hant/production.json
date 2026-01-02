@@ -5,8 +5,6 @@
     "time": "耗時"
   },
   "table": {
-    "alreadyRawMaterial": "已經是原材料",
-    "cannotMarkTarget": "目標物品不能標記為原材料",
     "headers": {
       "count": "數量",
       "facility": "設施",

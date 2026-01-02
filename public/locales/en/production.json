@@ -5,8 +5,6 @@
     "time": "Time"
   },
   "table": {
-    "alreadyRawMaterial": "Already a raw material",
-    "cannotMarkTarget": "Target items cannot be marked as raw materials",
     "headers": {
       "count": "Count",
       "facility": "Facility",

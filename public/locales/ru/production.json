@@ -5,8 +5,6 @@
     "time": "Время"
   },
   "table": {
-    "alreadyRawMaterial": "Уже является сырьем",
-    "cannotMarkTarget": "Целевые предметы не могут быть помечены как сырье",
     "headers": {
       "count": "Количество",
       "facility": "Объект",
