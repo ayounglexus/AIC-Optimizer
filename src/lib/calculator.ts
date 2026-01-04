@@ -649,6 +649,17 @@ function buildDependencyTree(
           const solvedCount = solution.get(node.recipe.id)!;
           node.facilityCount = solvedCount;
 
+          // Update the node's own targetRate based on its output
+          const mainOutput = node.recipe.outputs.find(
+            (o) => o.itemId === node.item.id,
+          );
+          if (mainOutput) {
+            node.targetRate =
+              calcRate(mainOutput.amount, node.recipe.craftingTime) *
+              solvedCount;
+          }
+
+          // Update dependencies' targetRate
           node.recipe.inputs.forEach((input, index) => {
             if (node.dependencies[index]) {
               node.dependencies[index].targetRate =
