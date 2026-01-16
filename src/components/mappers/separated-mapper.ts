@@ -18,31 +18,7 @@ import {
   createEdge,
 } from "../flow/flow-utils";
 import { createFlowNodeId, createTargetSinkId } from "@/lib/node-keys";
-import { calculateDemandRate, topologicalSort } from "@/lib/utils";
-
-/**
- * Performs topological sort on production nodes to determine processing order.
- *
- * Returns nodes in dependency order (producers before consumers), ensuring that
- * when we allocate capacity, all upstream producers are already initialized.
- *
- * @param nodeMap Map of aggregated production data
- * @returns Array of node keys in topological order (leaves to roots)
- */
-function topologicalSortNodes(
-  nodeMap: Map<string, AggregatedProductionNodeData>,
-): string[] {
-  return topologicalSort(nodeMap, (data) => {
-    const deps = new Set<string>();
-    data.node.dependencies.forEach((dep) => {
-      const depKey = createFlowNodeKey(dep);
-      if (nodeMap.has(depKey)) {
-        deps.add(depKey);
-      }
-    });
-    return deps;
-  });
-}
+import { calculateDemandRate } from "@/lib/utils";
 
 /**
  * Collects all produced (non-raw) item IDs from the node map.
@@ -109,14 +85,12 @@ export function mapPlanToFlowSeparated(
   facilities: Facility[],
 ): { nodes: (FlowProductionNode | FlowTargetNode)[]; edges: Edge[] } {
   const nodeMap = aggregateProductionNodes(rootNodes);
-  const sortedKeys = topologicalSortNodes(nodeMap);
   const targetsWithDownstream = findTargetsWithDownstream(rootNodes);
   const producedItemIds = collectProducedItems(nodeMap);
 
   // Initialize capacity pools
   const poolManager = new CapacityPoolManager();
-  sortedKeys.forEach((key) => {
-    const aggregatedData = nodeMap.get(key)!;
+  nodeMap.forEach((aggregatedData, key) => {
     const node = aggregatedData.node;
 
     if (shouldSkipNode(node, key, targetsWithDownstream)) return;
@@ -199,8 +173,7 @@ export function mapPlanToFlowSeparated(
   const edges: Edge[] = [];
   let edgeIdCounter = 0;
 
-  [...sortedKeys].reverse().forEach((consumerKey) => {
-    const consumerData = nodeMap.get(consumerKey)!;
+  nodeMap.forEach((consumerData, consumerKey) => {
     const consumerNode = consumerData.node;
 
     if (shouldSkipNode(consumerNode, consumerKey, targetsWithDownstream))
@@ -242,6 +215,7 @@ export function mapPlanToFlowSeparated(
                       allocation.sourceNodeId,
                       consumerFacility.facilityId,
                       allocation.allocatedAmount,
+                      "backward",
                     ),
                   );
                 });
@@ -379,6 +353,7 @@ function createTargetDependencyEdges(
                 allocation.sourceNodeId,
                 targetNodeId,
                 allocation.allocatedAmount,
+                "backward",
               ),
             );
           });
