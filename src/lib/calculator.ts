@@ -10,6 +10,7 @@ import type {
   ProductionDependencyGraph,
 } from "@/types";
 import { solveLinearSystem } from "./linear-solver";
+import { forcedRawMaterials } from "@/data";
 
 export type RecipeSelector = (
   availableRecipes: Recipe[],
@@ -273,6 +274,19 @@ function buildDependencyTree(
     }
 
     // Check if raw material
+    if (forcedRawMaterials.has(itemId)) {
+      return {
+        item,
+        targetRate: requiredRate,
+        recipe: null,
+        facility: null,
+        facilityCount: 0,
+        isRawMaterial: true,
+        isTarget: isDirectTarget,
+        dependencies: [],
+      };
+    }
+
     if (manualRawMaterials?.has(itemId)) {
       return {
         item,
