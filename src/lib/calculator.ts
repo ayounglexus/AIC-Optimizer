@@ -17,7 +17,7 @@ export type RecipeSelector = (
   visitedPath?: Set<ItemId>,
 ) => Recipe;
 
-const defaultRecipeSelector: RecipeSelector = (recipes) => recipes[0];
+export const defaultRecipeSelector: RecipeSelector = (recipes) => recipes[0];
 
 export const smartRecipeSelector: RecipeSelector = (recipes, visitedPath) => {
   if (!visitedPath?.size) return defaultRecipeSelector(recipes);
