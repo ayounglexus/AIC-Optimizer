@@ -20,6 +20,7 @@ import {
   createFlowNodeIdFromNode,
   createTargetSinkId,
 } from "@/lib/node-keys";
+import { calculateDemandRate } from "@/lib/utils";
 
 /**
  * Maps a UnifiedProductionPlan to React Flow nodes and edges in merged mode.
@@ -65,21 +66,31 @@ export function mapPlanToFlowMerged(
     node: ProductionNode,
     parentId: string | null = null,
     edgeIdCounter: { count: number },
+    flowToParent?: number,
   ): string => {
     const nodeId = getOrCreateNodeId(node);
     const key = createFlowNodeKey(node);
 
-    // Handle cycle placeholder
     if (node.isCyclePlaceholder) {
       if (parentId && parentId !== nodeId) {
-        // Cycle edges should use backward direction as they close the loop
+        const cycleFlowRate = flowToParent ?? node.targetRate;
+
+        console.log(`[Cycle Edge] ${node.item.id} (placeholder) -> parent`, {
+          nodeId,
+          parentId,
+          cycleItemId: node.cycleItemId,
+          targetRate: node.targetRate,
+          flowToParent,
+          cycleFlowRate,
+        });
+
         edges.push(
           createEdge(
             `e${edgeIdCounter.count++}`,
             nodeId,
             parentId,
-            node.targetRate,
-            "backward", // Cycle edges are inherently backward
+            cycleFlowRate,
+            "backward",
           ),
         );
       }
@@ -88,7 +99,9 @@ export function mapPlanToFlowMerged(
 
     // Skip targets without downstream
     if (node.isTarget && !targetsWithDownstream.has(key)) {
-      node.dependencies.forEach((dep) => traverse(dep, null, edgeIdCounter));
+      node.dependencies.forEach((dep) =>
+        traverse(dep, null, edgeIdCounter, dep.targetRate),
+      );
       return nodeId;
     }
 
@@ -124,16 +137,34 @@ export function mapPlanToFlowMerged(
       );
 
       if (!edgeExists) {
-        const aggregated = aggregatedNodes.get(key);
-        const flowRate = aggregated ? aggregated.totalRate : node.targetRate;
-
+        const flowRate = flowToParent ?? node.targetRate;
         edges.push(
           createEdge(`e${edgeIdCounter.count++}`, nodeId, parentId, flowRate),
         );
       }
     }
 
-    node.dependencies.forEach((dep) => traverse(dep, nodeId, edgeIdCounter));
+    node.dependencies.forEach((dep) => {
+      // Calculate actual flow from dependency to current node based on recipe ratios
+      let flowFromDep = dep.targetRate;
+
+      if (node.recipe) {
+        const aggregated = aggregatedNodes.get(key);
+        const nodeRate = aggregated ? aggregated.totalRate : node.targetRate;
+
+        const calculatedFlow = calculateDemandRate(
+          node.recipe,
+          dep.item.id,
+          node.item.id,
+          nodeRate,
+        );
+        if (calculatedFlow !== null) {
+          flowFromDep = calculatedFlow;
+        }
+      }
+
+      traverse(dep, nodeId, edgeIdCounter, flowFromDep);
+    });
     return nodeId;
   };
 
