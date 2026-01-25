@@ -102,7 +102,10 @@ const TargetItemsGrid = memo(function TargetItemsGrid({
                       }
                     }
                   }}
-                  onFocus={() => setFocusedIndex(index)}
+                  onFocus={(e) => {
+                    setFocusedIndex(index);
+                    e.target.select();
+                  }}
                   onBlur={(e) => {
                     if (e.target.value === "" || Number(e.target.value) < 1) {
                       onTargetChange(index, 1);
