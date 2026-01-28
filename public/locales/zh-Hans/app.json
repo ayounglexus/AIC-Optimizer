@@ -7,7 +7,11 @@
   "header": {
     "community": "社区",
     "discord": "Discord 服务器",
-    "qqGroup": "QQ 群"
+    "qqGroup": "QQ 群",
+    "settings": "设置"
+  },
+  "settings": {
+    "darkMode": "深色模式"
   },
   "tabs": {
     "merged": "配方视图",

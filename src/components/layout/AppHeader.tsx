@@ -11,10 +11,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { SiGithub, SiDiscord, SiTencentqq } from "react-icons/si";
+import { useSettings } from "@/contexts/SettingsContext";
 
 interface AppHeaderProps {
   onLanguageChange: (lang: string) => void;
@@ -22,6 +26,7 @@ interface AppHeaderProps {
 
 export default function AppHeader({ onLanguageChange }: AppHeaderProps) {
   const { t, i18n } = useTranslation("app");
+  const { darkMode, toggleDarkMode } = useSettings();
 
   return (
     <div className="flex flex-col gap-2">
@@ -29,6 +34,28 @@ export default function AppHeader({ onLanguageChange }: AppHeaderProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
         <div className="flex items-center gap-4">
+          {/* Settings dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                <span>{t("header.settings")}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>{t("header.settings")}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="flex items-center justify-between px-2 py-2">
+                <span className="text-sm">{t("settings.darkMode")}</span>
+                <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Community dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

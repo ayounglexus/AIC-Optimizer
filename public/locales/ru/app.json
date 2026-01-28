@@ -7,7 +7,11 @@
   "header": {
     "community": "Сообщество",
     "discord": "Сервер Discord",
-    "qqGroup": "Группа QQ"
+    "qqGroup": "Группа QQ",
+    "settings": "Настройки"
+  },
+  "settings": {
+    "darkMode": "Темная тема"
   },
   "tabs": {
     "merged": "Вид рецепта",

@@ -7,7 +7,11 @@
   "header": {
     "community": "Comunidad",
     "discord": "Servidor de Discord",
-    "qqGroup": "Grupo de QQ"
+    "qqGroup": "Grupo QQ",
+    "settings": "Configuración"
+  },
+  "settings": {
+    "darkMode": "Modo Oscuro"
   },
   "tabs": {
     "merged": "Vista de Receta",

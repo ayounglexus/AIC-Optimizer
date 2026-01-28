@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 
 import { items, facilities } from "./data";
 import { useProductionPlan } from "./hooks/useProductionPlan";
@@ -35,9 +36,10 @@ export default function App() {
   };
 
   return (
-    <TooltipProvider>
-      <div className="h-screen flex flex-col p-4 pb-0 gap-4">
-        <AppHeader onLanguageChange={handleLanguageChange} />
+    <SettingsProvider>
+      <TooltipProvider>
+        <div className="h-screen flex flex-col p-4 pb-0 gap-4">
+          <AppHeader onLanguageChange={handleLanguageChange} />
 
         <div className="flex-1 flex gap-4 min-h-0">
           <LeftPanel
@@ -77,5 +79,6 @@ export default function App() {
         <AppFooter />
       </div>
     </TooltipProvider>
+    </SettingsProvider>
   );
 }

@@ -7,7 +7,11 @@
   "header": {
     "community": "コミュニティ",
     "discord": "Discord サーバー",
-    "qqGroup": "QQ グループ"
+    "qqGroup": "QQ グループ",
+    "settings": "設定"
+  },
+  "settings": {
+    "darkMode": "ダークモード"
   },
   "tabs": {
     "merged": "レシピ表示",
