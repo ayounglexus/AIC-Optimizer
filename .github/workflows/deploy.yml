@@ -1,7 +1,12 @@
-# Deploy static content to GitHub Pages on release
+# Deploy static content to GitHub Pages
 name: Deploy static content to Pages
 
 on:
+  # Runs on pushes to master branch
+  push:
+    branches:
+      - master
+  
   # Runs when a new release is published
   release:
     types: [published]
