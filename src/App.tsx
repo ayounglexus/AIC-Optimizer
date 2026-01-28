@@ -185,7 +185,7 @@ export default function App() {
         
         // Merge dependencies
         if (row.directDependencyItemIds) {
-          row.directDependencyItemIds.forEach(dep => 
+          row.directDependencyItemIds.forEach((dep: ItemId) => 
             existing.directDependencyItemIds.add(dep)
           );
         }

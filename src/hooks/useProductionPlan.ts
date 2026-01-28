@@ -126,60 +126,60 @@ export function useProductionPlan() {
 
   // Calculate stats for each area - call hooks directly for each area
   const coreAicStats = useProductionStats(
-    areaPlans[AreaId.CORE_AIC].plan,
-    areasState[AreaId.CORE_AIC].manualRawMaterials
+    areaPlans["core-aic"].plan,
+    areasState["core-aic"].manualRawMaterials
   );
   const refugeeCampStats = useProductionStats(
-    areaPlans[AreaId.REFUGEE_CAMP].plan,
-    areasState[AreaId.REFUGEE_CAMP].manualRawMaterials
+    areaPlans["refugee-camp"].plan,
+    areasState["refugee-camp"].manualRawMaterials
   );
   const infraStationStats = useProductionStats(
-    areaPlans[AreaId.INFRA_STATION].plan,
-    areasState[AreaId.INFRA_STATION].manualRawMaterials
+    areaPlans["infra-station"].plan,
+    areasState["infra-station"].manualRawMaterials
   );
   const reconstructionHqStats = useProductionStats(
-    areaPlans[AreaId.RECONSTRUCTION_HQ].plan,
-    areasState[AreaId.RECONSTRUCTION_HQ].manualRawMaterials
+    areaPlans["reconstruction-hq"].plan,
+    areasState["reconstruction-hq"].manualRawMaterials
   );
 
   const areaStats = useMemo(() => ({
-    [AreaId.CORE_AIC]: coreAicStats,
-    [AreaId.REFUGEE_CAMP]: refugeeCampStats,
-    [AreaId.INFRA_STATION]: infraStationStats,
-    [AreaId.RECONSTRUCTION_HQ]: reconstructionHqStats,
+    "core-aic": coreAicStats,
+    "refugee-camp": refugeeCampStats,
+    "infra-station": infraStationStats,
+    "reconstruction-hq": reconstructionHqStats,
   }), [coreAicStats, refugeeCampStats, infraStationStats, reconstructionHqStats]);
 
   // Calculate table data for each area - call hooks directly for each area
   const coreAicTableData = useProductionTable(
-    areaPlans[AreaId.CORE_AIC].plan,
+    areaPlans["core-aic"].plan,
     recipes,
-    areasState[AreaId.CORE_AIC].recipeOverrides,
-    areasState[AreaId.CORE_AIC].manualRawMaterials
+    areasState["core-aic"].recipeOverrides,
+    areasState["core-aic"].manualRawMaterials
   );
   const refugeeCampTableData = useProductionTable(
-    areaPlans[AreaId.REFUGEE_CAMP].plan,
+    areaPlans["refugee-camp"].plan,
     recipes,
-    areasState[AreaId.REFUGEE_CAMP].recipeOverrides,
-    areasState[AreaId.REFUGEE_CAMP].manualRawMaterials
+    areasState["refugee-camp"].recipeOverrides,
+    areasState["refugee-camp"].manualRawMaterials
   );
   const infraStationTableData = useProductionTable(
-    areaPlans[AreaId.INFRA_STATION].plan,
+    areaPlans["infra-station"].plan,
     recipes,
-    areasState[AreaId.INFRA_STATION].recipeOverrides,
-    areasState[AreaId.INFRA_STATION].manualRawMaterials
+    areasState["infra-station"].recipeOverrides,
+    areasState["infra-station"].manualRawMaterials
   );
   const reconstructionHqTableData = useProductionTable(
-    areaPlans[AreaId.RECONSTRUCTION_HQ].plan,
+    areaPlans["reconstruction-hq"].plan,
     recipes,
-    areasState[AreaId.RECONSTRUCTION_HQ].recipeOverrides,
-    areasState[AreaId.RECONSTRUCTION_HQ].manualRawMaterials
+    areasState["reconstruction-hq"].recipeOverrides,
+    areasState["reconstruction-hq"].manualRawMaterials
   );
 
   const areaTableData = useMemo(() => ({
-    [AreaId.CORE_AIC]: coreAicTableData,
-    [AreaId.REFUGEE_CAMP]: refugeeCampTableData,
-    [AreaId.INFRA_STATION]: infraStationTableData,
-    [AreaId.RECONSTRUCTION_HQ]: reconstructionHqTableData,
+    "core-aic": coreAicTableData,
+    "refugee-camp": refugeeCampTableData,
+    "infra-station": infraStationTableData,
+    "reconstruction-hq": reconstructionHqTableData,
   }), [coreAicTableData, refugeeCampTableData, infraStationTableData, reconstructionHqTableData]);
 
   // Calculate overall stats by combining stats from all areas

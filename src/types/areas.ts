@@ -1,22 +1,28 @@
 // Factory area types and constants
 
-export const enum AreaId {
-  CORE_AIC = "core-aic",
-  REFUGEE_CAMP = "refugee-camp",
-  INFRA_STATION = "infra-station",
-  RECONSTRUCTION_HQ = "reconstruction-hq",
-}
+export type AreaId =
+  | "core-aic"
+  | "refugee-camp"
+  | "infra-station"
+  | "reconstruction-hq";
+
+export const AreaId = {
+  CORE_AIC: "core-aic" as AreaId,
+  REFUGEE_CAMP: "refugee-camp" as AreaId,
+  INFRA_STATION: "infra-station" as AreaId,
+  RECONSTRUCTION_HQ: "reconstruction-hq" as AreaId,
+} as const;
 
 export const AREA_NAMES: Record<AreaId, string> = {
-  [AreaId.CORE_AIC]: "Core AIC",
-  [AreaId.REFUGEE_CAMP]: "Refugee Camp",
-  [AreaId.INFRA_STATION]: "Infra-Station",
-  [AreaId.RECONSTRUCTION_HQ]: "Reconstruction HQ",
+  "core-aic": "Core AIC",
+  "refugee-camp": "Refugee Camp",
+  "infra-station": "Infra-Station",
+  "reconstruction-hq": "Reconstruction HQ",
 };
 
-export const ALL_AREAS = [
-  AreaId.CORE_AIC,
-  AreaId.REFUGEE_CAMP,
-  AreaId.INFRA_STATION,
-  AreaId.RECONSTRUCTION_HQ,
+export const ALL_AREAS: readonly AreaId[] = [
+  "core-aic",
+  "refugee-camp",
+  "infra-station",
+  "reconstruction-hq",
 ] as const;
