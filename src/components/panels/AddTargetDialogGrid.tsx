@@ -30,7 +30,10 @@ export default function AddTargetDialogGrid({
 }: AddTargetDialogGridProps) {
   const { t } = useTranslation("dialog");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedItemId, setSelectedItemId] = useState<ItemId | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<ItemId>>(
+    new Set()
+  );
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [defaultRate, setDefaultRate] = useState(10);
 
   const availableItems = items.filter(
@@ -43,22 +46,57 @@ export default function AddTargetDialogGrid({
     return name.includes(query) || item.id.toLowerCase().includes(query);
   });
 
-  const handleAddTarget = () => {
-    if (selectedItemId) {
-      onAddTarget(selectedItemId, defaultRate);
-      setSelectedItemId(null);
+  const handleAddTargets = () => {
+    if (selectedItemIds.size > 0) {
+      selectedItemIds.forEach((itemId) => {
+        onAddTarget(itemId, defaultRate);
+      });
+      setSelectedItemIds(new Set());
+      setLastClickedIndex(null);
       setSearchQuery("");
       onOpenChange(false);
     }
   };
 
-  const handleItemClick = (itemId: ItemId) => {
-    setSelectedItemId(itemId);
+  const handleItemClick = (
+    itemId: ItemId,
+    index: number,
+    event: React.MouseEvent
+  ) => {
+    if (event.ctrlKey || event.metaKey) {
+      // Ctrl/Cmd+Click: Toggle selection
+      setSelectedItemIds((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId);
+        } else {
+          newSet.add(itemId);
+        }
+        return newSet;
+      });
+      setLastClickedIndex(index);
+    } else if (event.shiftKey && lastClickedIndex !== null) {
+      // Shift+Click: Range selection
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      setSelectedItemIds((prev) => {
+        const newSet = new Set(prev);
+        for (let i = start; i <= end; i++) {
+          newSet.add(filteredItems[i].id);
+        }
+        return newSet;
+      });
+    } else {
+      // Normal click: Single selection
+      setSelectedItemIds(new Set([itemId]));
+      setLastClickedIndex(index);
+    }
   };
 
   const handleItemDoubleClick = (itemId: ItemId) => {
     onAddTarget(itemId, defaultRate);
-    setSelectedItemId(null);
+    setSelectedItemIds(new Set());
+    setLastClickedIndex(null);
     setSearchQuery("");
     onOpenChange(false);
   };
@@ -111,12 +149,12 @@ export default function AddTargetDialogGrid({
               </div>
             ) : (
               <div className="p-3 grid grid-cols-8 xl:grid-cols-10 gap-3">
-                {filteredItems.map((item) => (
+                {filteredItems.map((item, index) => (
                   <ItemButton
                     key={item.id}
                     item={item}
-                    isSelected={selectedItemId === item.id}
-                    onClick={() => handleItemClick(item.id)}
+                    isSelected={selectedItemIds.has(item.id)}
+                    onClick={(e) => handleItemClick(item.id, index, e)}
                     onDoubleClick={() => handleItemDoubleClick(item.id)}
                   />
                 ))}
@@ -127,24 +165,28 @@ export default function AddTargetDialogGrid({
           {/* Footer hint and buttons */}
           <div className="flex items-center justify-between pt-3 border-t shrink-0">
             <div className="text-xs text-muted-foreground">
-              {selectedItemId ? (
+              {selectedItemIds.size > 0 ? (
                 <span>
-                  {t("hint", {
-                    selected: getItemName(
-                      items.find((i) => i.id === selectedItemId)!,
-                    ),
-                  })}
+                  {selectedItemIds.size === 1
+                    ? t("hint", {
+                        selected: getItemName(
+                          items.find((i) => i.id === Array.from(selectedItemIds)[0])!,
+                        ),
+                      })
+                    : `${selectedItemIds.size} items selected (Ctrl+Click: toggle, Shift+Click: range)`}
                 </span>
               ) : (
-                <span>{t("clickToSelectDoubleClickToAdd")}</span>
+                <span>Click to select, Ctrl+Click for multiple, Shift+Click for range, Double-click to add</span>
               )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t("cancel")}
               </Button>
-              <Button onClick={handleAddTarget} disabled={!selectedItemId}>
-                {t("add")}
+              <Button onClick={handleAddTargets} disabled={selectedItemIds.size === 0}>
+                {selectedItemIds.size > 1
+                  ? `Add ${selectedItemIds.size} Items`
+                  : t("add")}
               </Button>
             </div>
           </div>
@@ -157,7 +199,7 @@ export default function AddTargetDialogGrid({
 type ItemButtonProps = {
   item: Item;
   isSelected: boolean;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
 };
 
@@ -173,8 +215,8 @@ function ItemButton({
     <Button
       variant="outline"
       className={`
-        relative aspect-square w-full h-auto p-3
-        transition-colors
+        relative w-full h-auto p-2
+        transition-colors flex flex-col gap-1
         ${
           isSelected
             ? "bg-primary/10 border-primary border-2"
@@ -185,7 +227,7 @@ function ItemButton({
       onDoubleClick={onDoubleClick}
       title={getItemName(item)}
     >
-      <div className="flex items-center justify-center w-full h-full">
+      <div className="aspect-square w-full flex items-center justify-center">
         {item.iconUrl ? (
           <img
             src={item.iconUrl}
@@ -198,6 +240,9 @@ function ItemButton({
             <span className="text-xs text-muted-foreground">{t("noIcon")}</span>
           </div>
         )}
+      </div>
+      <div className="text-[10px] text-center line-clamp-2 w-full leading-tight">
+        {getItemName(item)}
       </div>
     </Button>
   );
