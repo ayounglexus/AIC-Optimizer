@@ -14,10 +14,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { SiGithub, SiDiscord, SiTencentqq } from "react-icons/si";
+import { SiGithub } from "react-icons/si";
 import { useSettings } from "@/contexts/SettingsContext";
 
 interface AppHeaderProps {
@@ -56,47 +56,9 @@ export default function AppHeader({ onLanguageChange }: AppHeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Community dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <MessageCircle className="h-4 w-4" />
-                <span>{t("header.community")}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <a
-                  href="https://discord.gg/6V7CupPwb6"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <SiDiscord className="h-4 w-4" />
-                  <span>{t("header.discord")}</span>
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a
-                  href="https://qm.qq.com/q/OFNdDzjk4Y"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <SiTencentqq className="h-4 w-4" />
-                  <span>{t("header.qqGroup")}</span>
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* GitHub link */}
           <a
-            href="https://github.com/JamboChen/endfield-calc"
+            href="https://github.com/ayounglexus/AIC-Optimizer"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"

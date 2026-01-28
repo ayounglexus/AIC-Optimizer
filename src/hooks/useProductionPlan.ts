@@ -1,24 +1,95 @@
 import { calculateProductionPlan } from "@/lib/calculator";
 import { items, recipes, facilities } from "@/data";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import type { ProductionTarget } from "@/components/panels/TargetItemsGrid";
 import type { ItemId, RecipeId } from "@/types";
 import { useTranslation } from "react-i18next";
 import { useProductionStats } from "./useProductionStats";
 import { useProductionTable } from "./useProductionTable";
 
+// LocalStorage keys
+const STORAGE_KEYS = {
+  TARGETS: "productionTargets",
+  RECIPE_OVERRIDES: "recipeOverrides",
+  MANUAL_RAW_MATERIALS: "manualRawMaterials",
+};
+
+// Load saved state from localStorage
+function loadSavedState() {
+  try {
+    const savedTargets = localStorage.getItem(STORAGE_KEYS.TARGETS);
+    const savedRecipes = localStorage.getItem(STORAGE_KEYS.RECIPE_OVERRIDES);
+    const savedRawMaterials = localStorage.getItem(
+      STORAGE_KEYS.MANUAL_RAW_MATERIALS
+    );
+
+    return {
+      targets: savedTargets ? JSON.parse(savedTargets) : [],
+      recipeOverrides: savedRecipes
+        ? new Map(JSON.parse(savedRecipes))
+        : new Map(),
+      manualRawMaterials: savedRawMaterials
+        ? new Set(JSON.parse(savedRawMaterials))
+        : new Set(),
+    };
+  } catch (error) {
+    console.error("Failed to load saved state:", error);
+    return {
+      targets: [],
+      recipeOverrides: new Map(),
+      manualRawMaterials: new Set(),
+    };
+  }
+}
+
 export function useProductionPlan() {
   const { t } = useTranslation("app");
 
-  const [targets, setTargets] = useState<ProductionTarget[]>([]);
+  // Initialize state from localStorage
+  const [targets, setTargets] = useState<ProductionTarget[]>(() =>
+    loadSavedState().targets
+  );
   const [recipeOverrides, setRecipeOverrides] = useState<Map<ItemId, RecipeId>>(
-    new Map(),
+    () => loadSavedState().recipeOverrides
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"table" | "tree">("table");
   const [manualRawMaterials, setManualRawMaterials] = useState<Set<ItemId>>(
-    new Set(),
+    () => loadSavedState().manualRawMaterials
   );
+
+  // Auto-save targets to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TARGETS, JSON.stringify(targets));
+    } catch (error) {
+      console.error("Failed to save targets:", error);
+    }
+  }, [targets]);
+
+  // Auto-save recipe overrides to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.RECIPE_OVERRIDES,
+        JSON.stringify(Array.from(recipeOverrides.entries()))
+      );
+    } catch (error) {
+      console.error("Failed to save recipe overrides:", error);
+    }
+  }, [recipeOverrides]);
+
+  // Auto-save manual raw materials to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.MANUAL_RAW_MATERIALS,
+        JSON.stringify(Array.from(manualRawMaterials))
+      );
+    } catch (error) {
+      console.error("Failed to save manual raw materials:", error);
+    }
+  }, [manualRawMaterials]);
 
   // Core calculation: only returns dependency tree and cycles
   const { plan, error } = useMemo(() => {
