@@ -1,10 +1,8 @@
 # Endfield Calc — Production Chain Calculator for "Arknights: Endfield"
 
-[中文](./README_zh.md)
-
-[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-Try_Now-success?style=for-the-badge)](https://jamboChen.github.io/endfield-calc)
-[![Discord](https://img.shields.io/badge/Discord-JOIN_US-5865F2?logo=discord&logoColor=white)](https://discord.gg/6V7CupPwb6)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> **Special Thanks**: This project is a fork of [JamboChen's Endfield Calc](https://github.com/JamboChen/endfield-calc). Huge thank you to JamboChen for creating this amazing tool and releasing it under the MIT license!
 
 ## Overview
 
@@ -49,13 +47,10 @@ Both modes feature interactive flow diagrams, cycle visualization, and flow rate
 
 ## Getting Started
 
-### Try Online
-Visit **[https://jamboChen.github.io/endfield-calc](https://jamboChen.github.io/endfield-calc)**
-
 ### Local Development
 ```bash
-git clone https://github.com/JamboChen/endfield-calc.git
-cd endfield-calc
+git clone https://github.com/lightninglast/AIC-Arithmetic.git
+cd AIC-Arithmetic
 pnpm install
 pnpm run dev
 ```
