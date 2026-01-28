@@ -27,7 +27,7 @@ const TargetItemsGrid = memo(function TargetItemsGrid({
   onTargetChange,
   onTargetRemove,
   onAddClick,
-  maxTargets = 12,
+  maxTargets = 99,
 }: TargetItemsGridProps) {
   const { t } = useTranslation("targets");
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);

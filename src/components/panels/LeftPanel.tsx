@@ -40,7 +40,7 @@ const LeftPanel = memo(function LeftPanel({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">{t("title")}</CardTitle>
             <div className="text-xs text-muted-foreground">
-              {t("count", { current: targets.length, max: 12 })}
+              {t("count", { current: targets.length, max: 99 })}
             </div>
           </div>
         </CardHeader>
