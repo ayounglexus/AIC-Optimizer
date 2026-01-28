@@ -1,6 +1,6 @@
 // Factory area types and constants
 
-export enum AreaId {
+export const enum AreaId {
   CORE_AIC = "core-aic",
   REFUGEE_CAMP = "refugee-camp",
   INFRA_STATION = "infra-station",

@@ -11,6 +11,7 @@ import ProductionViewTabs from "./components/production/ProductionViewTabs";
 import AddTargetDialogGrid from "./components/panels/AddTargetDialogGrid";
 import AppFooter from "./components/layout/AppFooter";
 import { ALL_AREAS, type AreaId } from "./types/areas";
+import type { ItemId } from "./types";
 
 export default function App() {
   const { i18n } = useTranslation("app");
@@ -23,7 +24,6 @@ export default function App() {
     areaTableData,
     dialogOpenForArea,
     activeTab,
-    overallPlan,
     overallStats,
     handleTargetChange,
     handleTargetRemove,
@@ -85,6 +85,8 @@ export default function App() {
         rawMaterialCount: number;
         facilityRequirements: Map<string, number>;
         error: string | null;
+        isSelected: boolean;
+        onSelectedChange: (selected: boolean) => void;
         onTargetChange: (index: number, rate: number) => void;
         onTargetRemove: (index: number) => void;
         onAddClick: () => void;
@@ -120,11 +122,11 @@ export default function App() {
     const mergedTargets = new Set<ItemId>();
     const mergedCycles: any[] = [];
 
-    plansToMerge.forEach(plan => {
+    plansToMerge.forEach((plan: any) => {
       if (!plan) return;
       
       // Merge nodes
-      plan.nodes.forEach((node, key) => {
+      plan.nodes.forEach((node: any, key: string) => {
         if (mergedNodes.has(key)) {
           // If node exists, aggregate quantities
           const existing = mergedNodes.get(key);
@@ -142,7 +144,7 @@ export default function App() {
       mergedEdges.push(...plan.edges);
 
       // Merge targets
-      plan.targets.forEach(target => mergedTargets.add(target));
+      plan.targets.forEach((target: ItemId) => mergedTargets.add(target));
 
       // Merge cycles
       if (plan.detectedCycles) {
@@ -172,7 +174,7 @@ export default function App() {
     // Aggregate data by itemId
     const aggregatedMap = new Map<ItemId, any>();
 
-    allData.forEach(row => {
+    allData.forEach((row: any) => {
       const itemId = row.item.id;
       
       if (aggregatedMap.has(itemId)) {
