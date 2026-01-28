@@ -97,6 +97,23 @@ type FlowData = {
   recipeFacilityCounts: Map<RecipeId, number>;
 };
 
+type RecipeChoice = {
+  itemId: ItemId;
+  availableRecipes: RecipeId[];
+  currentIndex: number;
+};
+
+type BuildGraphResult = {
+  graph: BipartiteGraph;
+  recipeChoices: Map<ItemId, RecipeChoice>;
+};
+
+type InvalidSCCInfo = {
+  sccId: string;
+  involvedItems: Set<ItemId>;
+  reason: "no_solution" | "no_external_demand";
+};
+
 const getOrThrow = <K, V>(map: Map<K, V>, key: K, type: string): V => {
   const value = map.get(key);
   if (!value) throw new Error(`${type} not found: ${key}`);
@@ -108,7 +125,8 @@ function buildBipartiteGraph(
   maps: ProductionMaps,
   recipeOverrides?: Map<ItemId, RecipeId>,
   manualRawMaterials?: Set<ItemId>,
-): BipartiteGraph {
+  recipeConstraints?: Map<ItemId, Set<RecipeId>>, // New parameter: excluded recipes per item
+): BuildGraphResult {
   const graph: BipartiteGraph = {
     itemNodes: new Map(),
     recipeNodes: new Map(),
@@ -120,6 +138,7 @@ function buildBipartiteGraph(
     rawMaterials: new Set(),
   };
 
+  const recipeChoices = new Map<ItemId, RecipeChoice>();
   const visitedItems = new Set<ItemId>();
 
   function traverse(itemId: ItemId, visitedPath: Set<ItemId>) {
@@ -143,9 +162,17 @@ function buildBipartiteGraph(
       return;
     }
 
-    const availableRecipes = Array.from(maps.recipeMap.values()).filter((r) =>
+    let availableRecipes = Array.from(maps.recipeMap.values()).filter((r) =>
       r.outputs.some((o) => o.itemId === itemId),
     );
+
+    // Filter out excluded recipes
+    const excludedRecipes = recipeConstraints?.get(itemId);
+    if (excludedRecipes && excludedRecipes.size > 0) {
+      availableRecipes = availableRecipes.filter(
+        (r) => !excludedRecipes.has(r.id),
+      );
+    }
 
     if (availableRecipes.length === 0) {
       graph.itemNodes.get(itemId)!.isRawMaterial = true;
@@ -153,13 +180,33 @@ function buildBipartiteGraph(
       return;
     }
 
-    const selectedRecipe = recipeOverrides?.has(itemId)
-      ? getOrThrow(
-          maps.recipeMap,
-          recipeOverrides.get(itemId)!,
-          "Override recipe",
-        )
-      : selectRecipe(availableRecipes, visitedPath);
+    // Record recipe choices for this item
+    const recipeIds = availableRecipes.map((r) => r.id);
+    let currentIndex = 0;
+
+    // Determine which recipe to use
+    let selectedRecipe: Recipe;
+    if (recipeOverrides?.has(itemId)) {
+      selectedRecipe = getOrThrow(
+        maps.recipeMap,
+        recipeOverrides.get(itemId)!,
+        "Override recipe",
+      );
+      currentIndex = recipeIds.indexOf(selectedRecipe.id);
+      if (currentIndex === -1) currentIndex = 0;
+    } else {
+      selectedRecipe = selectRecipe(availableRecipes, visitedPath);
+      currentIndex = recipeIds.indexOf(selectedRecipe.id);
+    }
+
+    // Store choice information only if there are multiple options
+    if (availableRecipes.length > 1) {
+      recipeChoices.set(itemId, {
+        itemId,
+        availableRecipes: recipeIds,
+        currentIndex,
+      });
+    }
 
     const facility = getOrThrow(
       maps.facilityMap,
@@ -202,7 +249,7 @@ function buildBipartiteGraph(
 
   targets.forEach(({ itemId }) => traverse(itemId, new Set()));
 
-  return graph;
+  return { graph, recipeChoices };
 }
 
 function detectSCCs(graph: BipartiteGraph): SCCInfo[] {
@@ -405,9 +452,10 @@ function calculateFlows(
   condensedOrder: CondensedNode[],
   targetRates: Map<ItemId, number>,
   maps: ProductionMaps,
-): FlowData {
+): { flowData: FlowData; invalidSCCs: InvalidSCCInfo[] } {
   const itemDemands = new Map<ItemId, number>();
   const recipeFacilityCounts = new Map<RecipeId, number>();
+  const invalidSCCs: InvalidSCCInfo[] = [];
 
   targetRates.forEach((rate, itemId) => {
     itemDemands.set(itemId, rate);
@@ -422,7 +470,29 @@ function calculateFlows(
   reversedOrder.forEach((node, idx) => {
     if (node.type === "scc") {
       console.log(`[FLOW] [${idx}] Processing SCC: ${node.scc.id}`);
-      solveSCCFlow(node.scc, graph, itemDemands, recipeFacilityCounts, maps);
+      const solved = solveSCCFlow(
+        node.scc,
+        graph,
+        itemDemands,
+        recipeFacilityCounts,
+        maps,
+      );
+
+      if (!solved) {
+        // Record invalid SCC
+        const reason =
+          node.scc.externalInputs.size === 0
+            ? "no_external_demand"
+            : "no_solution";
+        invalidSCCs.push({
+          sccId: node.scc.id,
+          involvedItems: node.scc.items,
+          reason,
+        });
+        console.log(
+          `  [FLOW] Recorded invalid SCC: ${node.scc.id} (${reason})`,
+        );
+      }
     } else if (node.type === "recipe") {
       console.log(`[FLOW] [${idx}] Processing recipe: ${node.recipeId}`);
       const recipeData = graph.recipeNodes.get(node.recipeId)!;
@@ -459,7 +529,7 @@ function calculateFlows(
     }
   });
 
-  return { itemDemands, recipeFacilityCounts };
+  return { flowData: { itemDemands, recipeFacilityCounts }, invalidSCCs };
 }
 
 function solveSCCFlow(
@@ -468,7 +538,7 @@ function solveSCCFlow(
   itemDemands: Map<ItemId, number>,
   recipeFacilityCounts: Map<RecipeId, number>,
   maps: ProductionMaps,
-) {
+): boolean {
   console.log(`[SCC_SOLVE] Solving flow for SCC: ${scc.id}`);
 
   const externalDemands = new Map<ItemId, number>();
@@ -518,10 +588,8 @@ function solveSCCFlow(
 
   // Early exit if no external demand
   if (externalDemands.size === 0) {
-    console.log(
-      `  [SCC_SOLVE] No external demand, skipping this SCC (bad cycle)`,
-    );
-    return;
+    console.log(`  [SCC_SOLVE] No external demand, this is an invalid cycle`);
+    return false; // Changed: return false instead of return
   }
 
   const itemsList = Array.from(scc.items);
@@ -536,7 +604,7 @@ function solveSCCFlow(
 
   if (m === 0 || n === 0) {
     console.log(`  [SCC_SOLVE] Empty system, skipping`);
-    return;
+    return false; // Changed: return false instead of return
   }
 
   const matrix: number[][] = [];
@@ -576,7 +644,7 @@ function solveSCCFlow(
     console.warn(
       `  [SCC_SOLVE] Cannot solve SCC ${scc.id} - system has no solution`,
     );
-    return;
+    return false; // Changed: return false
   }
 
   console.log(`  Solution found:`);
@@ -614,6 +682,8 @@ function solveSCCFlow(
       );
     }
   });
+
+  return true; // Changed: return true on success
 }
 
 function buildProductionGraph(
@@ -716,6 +786,79 @@ function buildProductionGraph(
   };
 }
 
+/**
+ * Try to backtrack recipe choices to avoid invalid SCCs
+ * Returns updated recipe constraints or null if no more options
+ */
+function backtrackRecipeChoices(
+  recipeChoices: Map<ItemId, RecipeChoice>,
+  invalidSCCs: InvalidSCCInfo[],
+  currentConstraints: Map<ItemId, Set<RecipeId>>,
+): Map<ItemId, Set<RecipeId>> | null {
+  if (invalidSCCs.length === 0) {
+    return currentConstraints;
+  }
+
+  console.log(
+    `[BACKTRACK] Attempting to backtrack for ${invalidSCCs.length} invalid SCCs`,
+  );
+
+  // Collect all items involved in invalid SCCs
+  const problematicItems = new Set<ItemId>();
+  invalidSCCs.forEach((scc) => {
+    scc.involvedItems.forEach((itemId) => problematicItems.add(itemId));
+  });
+
+  console.log(
+    `[BACKTRACK] Problematic items: ${Array.from(problematicItems).join(", ")}`,
+  );
+
+  // Find items with alternative recipe choices, prioritizing items in invalid SCCs
+  const itemsWithChoices = Array.from(recipeChoices.values())
+    .filter((choice) => problematicItems.has(choice.itemId))
+    .sort((a, b) => b.currentIndex - a.currentIndex); // Start from items that have tried fewer options
+
+  if (itemsWithChoices.length === 0) {
+    // No items with multiple choices in the problematic set
+    console.log(
+      `[BACKTRACK] No alternative recipes available for problematic items`,
+    );
+    return null;
+  }
+
+  // Try to find the next recipe choice
+  for (const choice of itemsWithChoices) {
+    const nextIndex = choice.currentIndex + 1;
+
+    if (nextIndex < choice.availableRecipes.length) {
+      // Found an item with an untried recipe
+      console.log(
+        `[BACKTRACK] Trying next recipe for item ${choice.itemId}: ` +
+          `index ${nextIndex}/${choice.availableRecipes.length}`,
+      );
+
+      const newConstraints = new Map(currentConstraints);
+
+      // Exclude all recipes up to and including current index
+      const excludedRecipes = new Set(
+        currentConstraints.get(choice.itemId) || [],
+      );
+      for (let i = 0; i <= choice.currentIndex; i++) {
+        excludedRecipes.add(choice.availableRecipes[i]);
+      }
+      newConstraints.set(choice.itemId, excludedRecipes);
+
+      // Update the choice index
+      choice.currentIndex = nextIndex;
+
+      return newConstraints;
+    }
+  }
+
+  console.log(`[BACKTRACK] All recipe combinations exhausted`);
+  return null;
+}
+
 export function calculateProductionPlan(
   targets: Array<{ itemId: ItemId; rate: number }>,
   items: Item[],
@@ -732,17 +875,64 @@ export function calculateProductionPlan(
     facilityMap: new Map(facilities.map((f) => [f.id, f])),
   };
 
-  const graph = buildBipartiteGraph(
-    targets,
-    maps,
-    recipeOverrides,
-    manualRawMaterials,
+  const MAX_ITERATIONS = 100;
+  let iteration = 0;
+  let recipeConstraints = new Map<ItemId, Set<RecipeId>>();
+
+  while (iteration < MAX_ITERATIONS) {
+    iteration++;
+    console.log(`\n=== ITERATION ${iteration} ===`);
+
+    const { graph, recipeChoices } = buildBipartiteGraph(
+      targets,
+      maps,
+      recipeOverrides,
+      manualRawMaterials,
+      recipeConstraints,
+    );
+
+    const sccs = detectSCCs(graph);
+    const condensedOrder = buildCondensedDAGAndSort(graph, sccs);
+    const targetRatesMap = new Map(targets.map((t) => [t.itemId, t.rate]));
+    const { flowData, invalidSCCs } = calculateFlows(
+      graph,
+      condensedOrder,
+      targetRatesMap,
+      maps,
+    );
+
+    if (invalidSCCs.length === 0) {
+      // Success! No invalid SCCs found
+      console.log(
+        `[SUCCESS] Valid production plan found in ${iteration} iteration(s)`,
+      );
+      return buildProductionGraph(graph, flowData, sccs, maps);
+    }
+
+    // Try to backtrack
+    console.log(
+      `[ITERATION ${iteration}] Found ${invalidSCCs.length} invalid SCC(s), attempting backtrack`,
+    );
+
+    const newConstraints = backtrackRecipeChoices(
+      recipeChoices,
+      invalidSCCs,
+      recipeConstraints,
+    );
+
+    if (newConstraints === null) {
+      // No more recipe combinations to try
+      console.warn(
+        `[FAILED] Cannot find valid production plan after ${iteration} iterations. ` +
+          `Returning best-effort result with ${invalidSCCs.length} invalid cycle(s).`,
+      );
+      return buildProductionGraph(graph, flowData, sccs, maps);
+    }
+
+    recipeConstraints = newConstraints;
+  }
+
+  throw new Error(
+    `Maximum iterations (${MAX_ITERATIONS}) reached. Cannot find valid production plan.`,
   );
-
-  const sccs = detectSCCs(graph);
-  const condensedOrder = buildCondensedDAGAndSort(graph, sccs);
-  const targetRatesMap = new Map(targets.map((t) => [t.itemId, t.rate]));
-  const flowData = calculateFlows(graph, condensedOrder, targetRatesMap, maps);
-
-  return buildProductionGraph(graph, flowData, sccs, maps);
 }

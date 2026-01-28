@@ -61,7 +61,7 @@ export default function AddTargetDialogGrid({
   };
 
   const availableItems = items.filter(
-    (item) => !existingTargetIds.includes(item.id),
+    (item) => !existingTargetIds.includes(item.id) && item.asTarget !== false,
   );
 
   const filteredItems = availableItems.filter((item) => {
