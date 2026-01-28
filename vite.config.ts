@@ -12,7 +12,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  base: "/endfield-calc/",
+  base: "/AIC-Optimizer/",
   build: {
     rollupOptions: {
       output: {
