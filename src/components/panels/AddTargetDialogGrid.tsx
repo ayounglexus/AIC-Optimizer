@@ -7,9 +7,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { Item, ItemId } from "@/types";
+import type { Item, ItemId, Recipe } from "@/types";
 import { useTranslation } from "react-i18next";
 import { getItemName } from "@/lib/i18n-helpers";
 
@@ -17,6 +16,7 @@ type AddTargetDialogGridProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: Item[];
+  recipes: Recipe[];
   existingTargetIds: ItemId[];
   onAddTarget: (itemId: ItemId, rate: number) => void;
 };
@@ -25,6 +25,7 @@ export default function AddTargetDialogGrid({
   open,
   onOpenChange,
   items,
+  recipes,
   existingTargetIds,
   onAddTarget,
 }: AddTargetDialogGridProps) {
@@ -34,7 +35,30 @@ export default function AddTargetDialogGrid({
     new Set()
   );
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const [defaultRate, setDefaultRate] = useState(10);
+
+  // Calculate default rate for an item (rate that requires exactly 1 facility)
+  const getDefaultRateForItem = (itemId: ItemId): number => {
+    // Find recipes that produce this item
+    const producingRecipes = recipes.filter(recipe =>
+      recipe.outputs.some(output => output.itemId === itemId)
+    );
+
+    if (producingRecipes.length === 0) {
+      return 10; // Fallback if no recipe found
+    }
+
+    // Use the first recipe (primary recipe)
+    const recipe = producingRecipes[0];
+    const output = recipe.outputs.find(o => o.itemId === itemId);
+    
+    if (!output) return 10;
+
+    // Calculate production rate per minute for 1 facility
+    const ratePerMinute = (output.amount / recipe.craftingTime) * 60;
+    
+    // Round to 2 decimal places
+    return Math.round(ratePerMinute * 100) / 100;
+  };
 
   const availableItems = items.filter(
     (item) => !existingTargetIds.includes(item.id),
@@ -49,7 +73,8 @@ export default function AddTargetDialogGrid({
   const handleAddTargets = () => {
     if (selectedItemIds.size > 0) {
       selectedItemIds.forEach((itemId) => {
-        onAddTarget(itemId, defaultRate);
+        const rate = getDefaultRateForItem(itemId);
+        onAddTarget(itemId, rate);
       });
       setSelectedItemIds(new Set());
       setLastClickedIndex(null);
@@ -94,7 +119,8 @@ export default function AddTargetDialogGrid({
   };
 
   const handleItemDoubleClick = (itemId: ItemId) => {
-    onAddTarget(itemId, defaultRate);
+    const rate = getDefaultRateForItem(itemId);
+    onAddTarget(itemId, rate);
     setSelectedItemIds(new Set());
     setLastClickedIndex(null);
     setSearchQuery("");
@@ -118,22 +144,6 @@ export default function AddTargetDialogGrid({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm whitespace-nowrap">
-                {t("defaultRate")}:
-              </Label>
-              <Input
-                type="number"
-                value={defaultRate}
-                onChange={(e) => setDefaultRate(Number(e.target.value))}
-                className="h-9 w-24"
-                min="0.1"
-                step="0.1"
-              />
-              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                {t("rateUnit")}
-              </span>
             </div>
           </div>
 

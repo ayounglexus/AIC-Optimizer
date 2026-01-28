@@ -6,39 +6,78 @@ import type { ItemId, RecipeId } from "@/types";
 import { useTranslation } from "react-i18next";
 import { useProductionStats } from "./useProductionStats";
 import { useProductionTable } from "./useProductionTable";
+import { AreaId, ALL_AREAS } from "@/types/areas";
 
-// LocalStorage keys
-const STORAGE_KEYS = {
-  TARGETS: "productionTargets",
-  RECIPE_OVERRIDES: "recipeOverrides",
-  MANUAL_RAW_MATERIALS: "manualRawMaterials",
+// Per-area state structure
+export type AreaState = {
+  targets: ProductionTarget[];
+  recipeOverrides: Map<ItemId, RecipeId>;
+  manualRawMaterials: Set<ItemId>;
 };
 
-// Load saved state from localStorage
-function loadSavedState() {
-  try {
-    const savedTargets = localStorage.getItem(STORAGE_KEYS.TARGETS);
-    const savedRecipes = localStorage.getItem(STORAGE_KEYS.RECIPE_OVERRIDES);
-    const savedRawMaterials = localStorage.getItem(
-      STORAGE_KEYS.MANUAL_RAW_MATERIALS
-    );
+// All areas state
+export type AreasState = Record<AreaId, AreaState>;
 
-    return {
-      targets: savedTargets ? JSON.parse(savedTargets) : [],
-      recipeOverrides: savedRecipes
-        ? new Map(JSON.parse(savedRecipes))
-        : new Map(),
-      manualRawMaterials: savedRawMaterials
-        ? new Set(JSON.parse(savedRawMaterials))
-        : new Set(),
-    };
+// LocalStorage keys
+const STORAGE_KEY = "productionAreasState";
+
+// Create empty area state
+function createEmptyAreaState(): AreaState {
+  return {
+    targets: [],
+    recipeOverrides: new Map<ItemId, RecipeId>(),
+    manualRawMaterials: new Set<ItemId>(),
+  };
+}
+
+// Load saved state from localStorage
+function loadSavedState(): AreasState {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const result: AreasState = {} as AreasState;
+      
+      for (const areaId of ALL_AREAS) {
+        const areaData = parsed[areaId];
+        if (areaData) {
+          result[areaId] = {
+            targets: areaData.targets || [],
+            recipeOverrides: new Map(areaData.recipeOverrides || []),
+            manualRawMaterials: new Set(areaData.manualRawMaterials || []),
+          };
+        } else {
+          result[areaId] = createEmptyAreaState();
+        }
+      }
+      return result;
+    }
   } catch (error) {
     console.error("Failed to load saved state:", error);
-    return {
-      targets: [],
-      recipeOverrides: new Map(),
-      manualRawMaterials: new Set(),
-    };
+  }
+
+  // Return default empty state for all areas
+  const defaultState: AreasState = {} as AreasState;
+  for (const areaId of ALL_AREAS) {
+    defaultState[areaId] = createEmptyAreaState();
+  }
+  return defaultState;
+}
+
+// Save state to localStorage
+function saveState(state: AreasState) {
+  try {
+    const serializable: any = {};
+    for (const areaId of ALL_AREAS) {
+      serializable[areaId] = {
+        targets: state[areaId].targets,
+        recipeOverrides: Array.from(state[areaId].recipeOverrides.entries()),
+        manualRawMaterials: Array.from(state[areaId].manualRawMaterials),
+      };
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  } catch (error) {
+    console.error("Failed to save state:", error);
   }
 }
 
@@ -46,139 +85,223 @@ export function useProductionPlan() {
   const { t } = useTranslation("app");
 
   // Initialize state from localStorage
-  const [targets, setTargets] = useState<ProductionTarget[]>(() =>
-    loadSavedState().targets
-  );
-  const [recipeOverrides, setRecipeOverrides] = useState<Map<ItemId, RecipeId>>(
-    () => loadSavedState().recipeOverrides
-  );
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [areasState, setAreasState] = useState<AreasState>(loadSavedState);
+  const [dialogOpenForArea, setDialogOpenForArea] = useState<AreaId | null>(null);
   const [activeTab, setActiveTab] = useState<"table" | "tree">("table");
-  const [manualRawMaterials, setManualRawMaterials] = useState<Set<ItemId>>(
-    () => loadSavedState().manualRawMaterials
-  );
 
-  // Auto-save targets to localStorage
+  // Auto-save to localStorage whenever state changes
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.TARGETS, JSON.stringify(targets));
-    } catch (error) {
-      console.error("Failed to save targets:", error);
-    }
-  }, [targets]);
+    saveState(areasState);
+  }, [areasState]);
 
-  // Auto-save recipe overrides to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.RECIPE_OVERRIDES,
-        JSON.stringify(Array.from(recipeOverrides.entries()))
-      );
-    } catch (error) {
-      console.error("Failed to save recipe overrides:", error);
-    }
-  }, [recipeOverrides]);
+  // Calculate production plan for each area
+  const areaPlans = useMemo(() => {
+    const plans: Record<AreaId, { plan: any; error: string | null }> = {} as any;
+    
+    for (const areaId of ALL_AREAS) {
+      const areaState = areasState[areaId];
+      let plan = null;
+      let error: string | null = null;
 
-  // Auto-save manual raw materials to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.MANUAL_RAW_MATERIALS,
-        JSON.stringify(Array.from(manualRawMaterials))
-      );
-    } catch (error) {
-      console.error("Failed to save manual raw materials:", error);
-    }
-  }, [manualRawMaterials]);
-
-  // Core calculation: only returns dependency tree and cycles
-  const { plan, error } = useMemo(() => {
-    let plan = null;
-    let error: string | null = null;
-
-    try {
-      if (targets.length > 0) {
-        plan = calculateProductionPlan(
-          targets,
-          items,
-          recipes,
-          facilities,
-          recipeOverrides,
-          manualRawMaterials,
-        );
+      try {
+        if (areaState.targets.length > 0) {
+          plan = calculateProductionPlan(
+            areaState.targets,
+            items,
+            recipes,
+            facilities,
+            areaState.recipeOverrides,
+            areaState.manualRawMaterials,
+          );
+        }
+      } catch (e) {
+        error = e instanceof Error ? e.message : t("calculationError");
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : t("calculationError");
+
+      plans[areaId] = { plan, error };
     }
 
-    return { plan, error };
-  }, [targets, recipeOverrides, manualRawMaterials, t]);
+    return plans;
+  }, [areasState, t]);
 
-  // View-specific data: computed in view layer hooks
-  const stats = useProductionStats(plan, manualRawMaterials);
-  const tableData = useProductionTable(
-    plan,
-    recipes,
-    recipeOverrides,
-    manualRawMaterials,
+  // Calculate stats for each area - call hooks directly for each area
+  const coreAicStats = useProductionStats(
+    areaPlans[AreaId.CORE_AIC].plan,
+    areasState[AreaId.CORE_AIC].manualRawMaterials
+  );
+  const refugeeCampStats = useProductionStats(
+    areaPlans[AreaId.REFUGEE_CAMP].plan,
+    areasState[AreaId.REFUGEE_CAMP].manualRawMaterials
+  );
+  const infraStationStats = useProductionStats(
+    areaPlans[AreaId.INFRA_STATION].plan,
+    areasState[AreaId.INFRA_STATION].manualRawMaterials
+  );
+  const reconstructionHqStats = useProductionStats(
+    areaPlans[AreaId.RECONSTRUCTION_HQ].plan,
+    areasState[AreaId.RECONSTRUCTION_HQ].manualRawMaterials
   );
 
-  const handleTargetChange = useCallback((index: number, rate: number) => {
-    setTargets((prev) => {
-      const newTargets = [...prev];
-      newTargets[index].rate = rate;
-      return newTargets;
+  const areaStats = useMemo(() => ({
+    [AreaId.CORE_AIC]: coreAicStats,
+    [AreaId.REFUGEE_CAMP]: refugeeCampStats,
+    [AreaId.INFRA_STATION]: infraStationStats,
+    [AreaId.RECONSTRUCTION_HQ]: reconstructionHqStats,
+  }), [coreAicStats, refugeeCampStats, infraStationStats, reconstructionHqStats]);
+
+  // Calculate table data for each area - call hooks directly for each area
+  const coreAicTableData = useProductionTable(
+    areaPlans[AreaId.CORE_AIC].plan,
+    recipes,
+    areasState[AreaId.CORE_AIC].recipeOverrides,
+    areasState[AreaId.CORE_AIC].manualRawMaterials
+  );
+  const refugeeCampTableData = useProductionTable(
+    areaPlans[AreaId.REFUGEE_CAMP].plan,
+    recipes,
+    areasState[AreaId.REFUGEE_CAMP].recipeOverrides,
+    areasState[AreaId.REFUGEE_CAMP].manualRawMaterials
+  );
+  const infraStationTableData = useProductionTable(
+    areaPlans[AreaId.INFRA_STATION].plan,
+    recipes,
+    areasState[AreaId.INFRA_STATION].recipeOverrides,
+    areasState[AreaId.INFRA_STATION].manualRawMaterials
+  );
+  const reconstructionHqTableData = useProductionTable(
+    areaPlans[AreaId.RECONSTRUCTION_HQ].plan,
+    recipes,
+    areasState[AreaId.RECONSTRUCTION_HQ].recipeOverrides,
+    areasState[AreaId.RECONSTRUCTION_HQ].manualRawMaterials
+  );
+
+  const areaTableData = useMemo(() => ({
+    [AreaId.CORE_AIC]: coreAicTableData,
+    [AreaId.REFUGEE_CAMP]: refugeeCampTableData,
+    [AreaId.INFRA_STATION]: infraStationTableData,
+    [AreaId.RECONSTRUCTION_HQ]: reconstructionHqTableData,
+  }), [coreAicTableData, refugeeCampTableData, infraStationTableData, reconstructionHqTableData]);
+
+  // Calculate overall stats by combining stats from all areas
+  const overallStats = useMemo(() => {
+    const combinedStats = {
+      totalPowerConsumption: 0,
+      rawMaterialRequirements: new Map<ItemId, number>(),
+      uniqueProductionSteps: 0,
+      facilityRequirements: new Map<string, number>(),
+    };
+
+    ALL_AREAS.forEach(areaId => {
+      const stats = areaStats[areaId];
+      combinedStats.totalPowerConsumption += stats.totalPowerConsumption;
+      combinedStats.uniqueProductionSteps += stats.uniqueProductionSteps;
+
+      // Combine raw materials
+      stats.rawMaterialRequirements.forEach((amount, itemId) => {
+        combinedStats.rawMaterialRequirements.set(
+          itemId,
+          (combinedStats.rawMaterialRequirements.get(itemId) || 0) + amount
+        );
+      });
+
+      // Combine facilities
+      stats.facilityRequirements.forEach((count, facilityId) => {
+        combinedStats.facilityRequirements.set(
+          facilityId,
+          (combinedStats.facilityRequirements.get(facilityId) || 0) + count
+        );
+      });
     });
+
+    return combinedStats;
+  }, [areaStats]);
+
+  // Overall plan is null - we only use overall stats
+  const overallPlan = null;
+
+  // Handler functions for per-area operations
+  const handleTargetChange = useCallback((areaId: AreaId, index: number, rate: number) => {
+    setAreasState((prev) => ({
+      ...prev,
+      [areaId]: {
+        ...prev[areaId],
+        targets: prev[areaId].targets.map((t, i) =>
+          i === index ? { ...t, rate } : t
+        ),
+      },
+    }));
   }, []);
 
-  const handleTargetRemove = useCallback((index: number) => {
-    setTargets((prev) => prev.filter((_, i) => i !== index));
+  const handleTargetRemove = useCallback((areaId: AreaId, index: number) => {
+    setAreasState((prev) => ({
+      ...prev,
+      [areaId]: {
+        ...prev[areaId],
+        targets: prev[areaId].targets.filter((_, i) => i !== index),
+      },
+    }));
   }, []);
 
-  const handleAddTarget = useCallback((itemId: ItemId, rate: number) => {
-    setTargets((prev) => [...prev, { itemId, rate }]);
+  const handleAddTarget = useCallback((areaId: AreaId, itemId: ItemId, rate: number) => {
+    setAreasState((prev) => ({
+      ...prev,
+      [areaId]: {
+        ...prev[areaId],
+        targets: [...prev[areaId].targets, { itemId, rate }],
+      },
+    }));
   }, []);
 
   const handleRecipeChange = useCallback(
-    (itemId: ItemId, recipeId: RecipeId) => {
-      setRecipeOverrides((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(itemId, recipeId);
-        return newMap;
+    (areaId: AreaId, itemId: ItemId, recipeId: RecipeId) => {
+      setAreasState((prev) => {
+        const newOverrides = new Map(prev[areaId].recipeOverrides);
+        newOverrides.set(itemId, recipeId);
+        return {
+          ...prev,
+          [areaId]: {
+            ...prev[areaId],
+            recipeOverrides: newOverrides,
+          },
+        };
       });
     },
     [],
   );
 
-  const handleAddClick = useCallback(() => {
-    setDialogOpen(true);
+  const handleAddClick = useCallback((areaId: AreaId) => {
+    setDialogOpenForArea(areaId);
   }, []);
 
-  const handleToggleRawMaterial = useCallback((itemId: ItemId) => {
-    setManualRawMaterials((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+  const handleToggleRawMaterial = useCallback((areaId: AreaId, itemId: ItemId) => {
+    setAreasState((prev) => {
+      const newRawMaterials = new Set(prev[areaId].manualRawMaterials);
+      if (newRawMaterials.has(itemId)) {
+        newRawMaterials.delete(itemId);
       } else {
-        newSet.add(itemId);
+        newRawMaterials.add(itemId);
       }
-      return newSet;
+      return {
+        ...prev,
+        [areaId]: {
+          ...prev[areaId],
+          manualRawMaterials: newRawMaterials,
+        },
+      };
     });
   }, []);
 
   return {
-    targets,
-    setTargets,
-    recipeOverrides,
-    setRecipeOverrides,
-    dialogOpen,
-    setDialogOpen,
+    areasState,
+    areaPlans,
+    areaStats,
+    areaTableData,
+    overallPlan,
+    overallStats,
+    dialogOpenForArea,
+    setDialogOpenForArea,
     activeTab,
     setActiveTab,
-    plan,
-    tableData,
-    stats,
-    error,
     handleTargetChange,
     handleTargetRemove,
     handleAddTarget,
